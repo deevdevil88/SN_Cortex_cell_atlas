@@ -1,0 +1,1653 @@
+---
+title: "LDScore & MAGMA results plots"
+author: "Devika Agarwal"
+date: 'Last update: `r date()`'
+output:
+  html_document:
+    number_sections: true
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: yes
+      toc_depth: 6
+---
+
+```{r setup, include=FALSE}
+#setwd("F:/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma")
+library(ggplot2)
+library(reshape)
+#rm(list = ls())
+library(viridis)
+library(viridisLite)
+theme_set(theme_bw())
+```
+
+
+
+
+# LDSCORE Analysis: Cortex 25kb
+
+```{r get_info_results_cortex_level1_1,echo=FALSE}
+list_gwa_name<-read.table(file="info_gwa_cortex.txt",sep=",",h=T)
+atlas<-"Cortex_f0.1"
+distance<-"25"
+dir_data<-paste("/Volumes/Seagate Backup Plus Drive/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/Final_Cortex_L1_all_Cell_Type_",distance,"k","_","ldscores",sep="")
+list_file<-list.files(path = dir_data,pattern=".cell_type_results.txt")
+val<-paste("_Cortex_L1_all_",distance,".cell_type_results.txt",sep="")
+list_name<-gsub(val,"",list_file)
+```
+
+```{r make_table_cortex_level1_2,echo=FALSE}
+
+for (i in c(1:length(list_file))){
+  file1<-paste(dir_data,"/",list_file[i],sep="")
+  df_temp<-read.table(file1,sep="\t",h=T)
+  df_temp$GWA<-list_name[i]
+  if (i==1) {
+    df<-df_temp
+  }
+  else {
+    df<-rbind(df,df_temp)
+  }
+}
+colnames(list_gwa_name)[1]<-"GWA"
+df<-merge(list_gwa_name,df,by=c("GWA"))
+DT::datatable(df, rownames = TRUE, caption = "Cortex atlas 25kb LDscore", escape = FALSE, extensions = 'Buttons', options = list(dom = 'ftipr'))
+
+```
+
+## LDScore Barplot
+
+```{r make_bar_plot_ldscore_cortex_level1_3,fig.height=8,fig.width=8, echo=FALSE}
+df_red<-df[df$Exclude==0,]
+colnames(df_red)[5]<-"Cell"
+colnames(df_red)[4]<-"Category"
+colnames(df_red)[2]<-"Trait"
+colnames(df_red)[8]<-"p"
+list_cell<-unique(as.character(df_red$Cell))
+p_bon<-0.05/length(list_cell)
+
+
+df_red$Trait<- factor(df_red$Trait, levels=unique(df_red$Trait [order(df_red$Category)]))
+
+p1<-ggplot(df_red, aes(x =Trait , y = -log(p ,10),fill=Cell)) +geom_bar(stat='identity',position=position_dodge(),width = 0.8) +
+theme(text = element_text(size=10),axis.text.x = element_text(angle = 90, hjust = 1))+
+ylab("-log10(pvalue)") + xlab("") + ggtitle("Cortex Atlas LDScore")+ theme(plot.title = element_text(hjust = 0.5,size=12,face="bold"))+
+  
+coord_flip()+geom_hline(yintercept = -log(p_bon,10),linetype="dashed")+
+facet_grid(Category ~ ., scales = "free", space = "free")+scale_fill_manual("Cell", values = c("Microglia" = "#00BE67", "Pyramidal_Neurons" = "#C77CFF", "Interneurons" = "#FF61CC","Astrocyte"="#CD9600","ODC"="#00BFC4","OPC"="#00A9FF"))
+
+
+#tiff(filename = "/Users/dpag0499/Documents/PROJECTS/Tissue_specificity/src/figure_paper/fig1_sn.tiff", width = 3000, height = 2000,res = 300)
+p1
+#dev.off()
+#system("tiffcp -c lzw fig1_sn.tiff fig1_sn_v1.tiff")
+#system("mv fig1_sn_v1.tiff fig1_sn.tiff")
+```
+
+# MAGMA Analysis: Cortex 25kb
+
+```{r get_info_results_cortex_level1_4,echo=FALSE}
+list_gwa_name_magma <-read.table(file="info_gwa_cortex_magma.txt",sep=",",h=T)
+#atlas<-"Midbrain_New"
+distance<-"25"
+dir_data<-paste("/Volumes/Seagate Backup Plus Drive/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/Final_",distance,"Kb","_Cortex_f0.1",sep="")
+list_file<-list.files(path = dir_data,pattern=".25UP.25DOWN.level1.Cortex_10x_f0.1_final.gsa.out")
+val<-paste(".25UP.25DOWN.level1.Cortex_10x_f0.1_final.gsa.out",sep="")
+list_name<-gsub(val,"",list_file)
+```
+
+```{r make_table_cortex_level1_5,echo=FALSE}
+
+for (i in c(1:length(list_file))){
+  file1<-paste(dir_data,"/",list_file[i],sep="")
+  df_temp<-read.table(file1,sep="",h=T)
+  df_temp$GWA<-list_name[i]
+  if (i==1) {
+    df<-df_temp
+  }
+  else {
+    df<-rbind(df,df_temp)
+  }
+}
+colnames(list_gwa_name_magma)[1]<-"GWA"
+df_magma<-merge(list_gwa_name_magma,df,by=c("GWA"))
+DT::datatable(df_magma, rownames = TRUE, caption = "Cortex Atlas 25KB MAGMA", escape = FALSE, extensions = 'Buttons', options = list(dom = 'ftipr'))
+
+```
+
+# MAGMA barplot
+
+```{r make_bar_plot_magma_cortex_level1_6,echo=FALSE, fig.width=8, fig.height=8}
+df_red_magma <-df_magma[df_magma$Exclude==0,]
+colnames(df_red_magma)[5]<-"Cell"
+colnames(df_red_magma)[4]<-"Category"
+colnames(df_red_magma)[2]<-"Trait"
+colnames(df_red_magma)[11]<-"p_magma"
+list_cell<-unique(as.character(df_red_magma$Cell))
+p_bon<-0.05/length(list_cell)
+
+
+df_red_magma$Trait<- factor(df_red_magma$Trait, levels=unique(df_red_magma$Trait [order(df_red_magma$Category)]))
+
+#tiff(filename ="F:/Oxford_postdoc/Cell_type_risk_skene/Figure_SN_new/fig1_SN_25kb_new.tiff", width = 3000, height = 2000,res = 300)
+p2 <-ggplot(df_red_magma, aes(x =Trait , y = -log(p_magma ,10),fill=Cell)) +geom_bar(stat='identity',position=position_dodge(),width = 0.8) +
+theme(text = element_text(size=10),axis.text.x = element_text(angle = 90, hjust = 1))+
+ylab("-log10(pvalue)") + xlab("") + ggtitle("Cortex Atlas MAGMA ")+ theme(plot.title = element_text(hjust = 0.5,size=12,face="bold"))+
+coord_flip()+geom_hline(yintercept = -log(p_bon,10),linetype="dashed")+
+facet_grid(Category ~ ., scales = "free", space = "free")+scale_fill_manual("Cell", values = c("Microglia" = "#00BE67", "Pyramidal_Neurons" = "#C77CFF", "Interneurons" = "#FF61CC","Astrocyte"="#CD9600","ODC"="#00BFC4","OPC"="#00A9FF"))
+
+p2
+#dev.off()
+#system("tiffcp -c lzw fig1_cortex.tiff fig1_cortex_v1.tiff")
+#system("mv fig1_cortex_v1.tiff fig1_cortex.tiff")
+```
+
+# Combined MidBrain (25KB) 
++ Bonferroni Correction for both MAGMA and LDSC
+
+```{r combined_midbrain_level1_1, echo=FALSE}
+df_red <- df_red[,c(2,4,5,8)]
+
+list_trait <- as.character(unique(df_red$Trait))
+  
+ for (i in c(1:length(list_trait))){
+  file1<- subset(df_red, df_red$Trait== list_trait[i], select=1:4)
+  df_temp<- file1
+  #df_temp$pfdr_ldsc <- p.adjust(df_temp$p,method = "fdr")
+  df_temp$pbon_ldsc <- p.adjust(df_temp$p, method = "bonferroni")
+  if (i==1) {
+    df <-df_temp
+  }
+  else {
+    df<-rbind(df,df_temp)
+  }
+}
+
+df_red_ldsc <- df
+
+```
+
+```{r}
+df_red_magma <- df_red_magma[,c(2,4,5,11)]
+
+list_trait <- as.character(unique(df_red_magma$Trait))
+  
+ for (i in c(1:length(list_trait))){
+  file1<- subset(df_red_magma, df_red_magma$Trait== list_trait[i], select=1:4)
+  df_temp<- file1
+  #df_temp$pfdr_magma <- p.adjust(df_temp$p_magma,method = "fdr")
+  df_temp$pbon_magma <- p.adjust(df_temp$p_magma, method = "bonferroni")
+  if (i==1) {
+    df <-df_temp
+  }
+  else {
+    df<-rbind(df,df_temp)
+  }
+}
+
+df_red_magma <- df 
+```
+
+
+```{r}
+merged_results_Cortex <- merge(df_red_ldsc,df_red_magma, by.all= c("Trait","Cell"),all.x=T,all.y=T)
+#merged_results_Cortex <- merged_results_Cortex %>%
+   #mutate_at(vars(p_magma, pbon_magma, pfdr_magma), ~replace_na(., -1))
+#p_bon<-0.05/length(list_cell)
+ #p_bon_log <- -log(p_bon,10)
+```
+
+
+```{r combined_midbrain_level1_1, echo=FALSE}
+merged_results_Cortex$Methods <- ifelse(merged_results_Cortex$pbon_ldsc <= 0.05 & merged_results_Cortex$pbon_magma <= 0.05,"Both**",
+                        ifelse(merged_results_Cortex$pbon_ldsc <= 0.05 & merged_results_Cortex$p_magma > 0.05 ,"LDSC**",
+                         ifelse(merged_results_Cortex$pbon_ldsc <= 0.05 & merged_results_Cortex$p_magma <= 0.05, "LDSC** & MAGMA*",
+                        ifelse(merged_results_Cortex$pbon_magma <= 0.05 & merged_results_Cortex$p > 0.05, "MAGMA**",
+                        ifelse(merged_results_Cortex$pbon_magma <= 0.05 & merged_results_Cortex$p <= 0.05 , "MAGMA** & LDSC*","NONE")))))           
+                               
+merged_results_Cortex$Region <- "Cortex"           
+                               
+
+levels(merged_results_Cortex$Cell)[levels(merged_results_Cortex$Cell)=="Pyramidal_Neurons"] <- "Ex neurons"
+levels(merged_results_Cortex$Cell)[levels(merged_results_Cortex$Cell)=="Interneurons"] <- "In neurons"
+levels(merged_results_Cortex$Category)[levels(merged_results_Cortex$Category)=="Psychatric disorder"] <- "Psychiatric disorder"
+write.table(merged_results_Cortex, file="Celltype_risk_Cortex_25kb_all.txt", sep="\t", quote=F)
+```
+
+
+
+
+
+
+# Combined MAGMA & LDSC cortex tile plot
++ Bonferronic correction and nominal p-value significance
+
+```{r combined_cortex_level1_2, fig.height=3, fig.width=7.1, echo=FALSE}
+merged_results_Cortex_1 <- merged_results_Cortex
+merged_results_Cortex_1$Methods <- gsub("NONE","", merged_results_Cortex_1$Methods)
+
+Cortex_tile_1 <- ggplot(merged_results_Cortex_1, aes(Trait,Cell,fill=Methods))
+Cortex_tile_1 <- Cortex_tile_1 + geom_tile()
+#Cortex_tile_1 <- Cortex_tile_1 + scale_fill_viridis_d(option = "magma")
+Cortex_tile_1 <- Cortex_tile_1 + scale_fill_manual(breaks= c("Both**","LDSC** & MAGMA*","LDSC**","MAGMA** & LDSC*","MAGMA**"), values=c("Both**"="#20B2AA","LDSC** & MAGMA*"="#3B0F70FF","LDSC**"="#8C2981FF", "MAGMA**"="#FE9F6DFF","MAGMA** & LDSC*"="#DE4968FF")) + theme(panel.background = element_rect(fill = '#FCFDBFFF'))
+#,"#FCFDBFFF"))
+Cortex_tile_1 <- Cortex_tile_1 + theme(axis.text.x = element_text(angle =45,vjust=1, hjust = 1, size=6))
+Cortex_tile_1 <- Cortex_tile_1 + theme(axis.text.y = element_text(size=6))
+Cortex_tile_1 <- Cortex_tile_1 + theme(legend.text  = element_text(size=6))
+Cortex_tile_1 <- Cortex_tile_1 + theme(legend.title = element_text(size=6),panel.grid.major = element_blank())
+#Cortex_tile <- Cortex_tile + theme(axis.text.y = element_text(size=11))
+#Cortex_tile <- Cortex_tile + theme(legend.position='none')
+Cortex_tile_1 <- Cortex_tile_1 +  ggtitle("Cortex cell type associations for complex traits")+ theme(plot.title = element_text(hjust = 0.5,size=7,face="bold"))
+Cortex_tile_1 <-  Cortex_tile_1 + facet_grid(. ~ Category, scales = "free", space = "free", shrink = F) 
+Cortex_tile_1 <- Cortex_tile_1 + theme(strip.background = element_blank(), strip.text.x = element_text(size=5, face = "bold"))
+#p3 <- p3 + geom_raster()
+Cortex_tile_1 <- Cortex_tile_1 + xlab("") + ylab("")
+Cortex_tile_1
+```
+
+
+
+# Spearman Correlation: LDSC vs MAGMA Cortex
+
+```{r ldsc_cortex level1_9, echo=FALSE,include=FALSE}
+cortex_merged <-  merge(df_red_ldsc,df_red_magma, by.all= c("Trait","Cell"),all.x=T,all.y=T)
+cortex_merged$logp_magma <- -log(cortex_merged$p_magma,10)
+cortex_merged <- cortex_merged %>% group_by(Trait)%>% mutate(rank_magma=rank(logp_magma, ties.method="first"))
+
+cortex_merged$logp_ldsc <- -log(cortex_merged$p,10)
+cortex_merged <- cortex_merged %>% group_by(Trait)%>% mutate(rank_ldsc=rank(logp_ldsc, ties.method="first"))
+
+res2 <-cor.test(cortex_merged$logp_magma, cortex_merged$logp_ldsc,  method = "spearman")
+res2
+
+res2 <-cor.test(cortex_merged$rank_ldsc, cortex_merged$rank_magma,  method = "spearman")
+res2
+
+#df_red<-df[df$Exclude==0,]
+#df_red <- df_red[,c(2,5,8)]
+library(dplyr)
+df_red_ldsc$logp <- -log(df_red_ldsc$p,10)
+#df_red_ldsc <- df_red_ldsc %>% group_by(Trait) %>% mutate(rank_ldsc=rank(logp,ties.method = "first"))
+df_red_ldsc <- df_red_ldsc[,-c(2,4,5)]
+
+library(tidyr)
+Cortex_ldscore_wide <- spread(df_red_ldsc,Trait,logp)
+Cortex_ldscore_wide <- as.data.frame(Cortex_ldscore_wide)
+rownames(Cortex_ldscore_wide) <- Cortex_ldscore_wide$Cell
+Cortex_ldscore_wide <- Cortex_ldscore_wide[,-1]
+```
+
+```{r magma_cortex level1_10, echo=FALSE, include=F}
+#rownames(df_red) <- df_red$Name
+#df_red_magma <-df_magma[df_magma$Exclude==0,]
+#df_red_magma <- df_red_magma[,c(1,3,4)]
+#library(dplyr)
+df_red_magma$logp <- -log(df_red_magma$p_magma,10)
+#df_red_magma <- df_red_magma[,c(2,5,12)]
+#df_red_magma <- df_red_magma %>% group_by(Trait) %>% mutate(rank_magma=rank(logp,ties.method = "first"))
+df_red_magma <- df_red_magma[,-c(2,4,5)]
+#library(tidyr)
+Cortex_magma_wide <- spread(df_red_magma,Trait,logp)
+Cortex_magma_wide <- as.data.frame(Cortex_magma_wide)
+rownames(Cortex_magma_wide) <- Cortex_magma_wide$Cell
+Cortex_magma_wide <- Cortex_magma_wide[,-c(1)]
+```
+
+
+
+```{r corr_cortex level1_11, echo=FALSE, warning=FALSE, include=FALSE}
+library(psych)
+cor <- corr.test(Cortex_ldscore_wide, Cortex_magma_wide[,match(colnames(Cortex_ldscore_wide),colnames(Cortex_magma_wide))], method="spearman", adjust="none")
+Cortex_corr_LDSC_MAGMA <- as.data.frame(cor$r)
+#write.table(SN_Cortex_corr_LDSC_MAGMA, file="SN_Cortex_corr_LDSC_MAGMA.txt", sep="\t", quote=F)
+```
+
+```{r, spearman_cortex level1_12, echo=FALSE, fig.height=4, fig.width=7, echo=FALSE, warning=FALSE}
+library(corrplot)
+Cortex_corr_LDSC_MAGMA <- as.matrix(Cortex_corr_LDSC_MAGMA)
+#tiff(filename ="F:/Oxford_postdoc/Cell_type_risk_skene/Corrplot_Cortex_SN_joint/SN_Cortex_ldscore_magma_corrplot_log10p.tiff", width = 18, height = 14,res = 300, units= "in")
+par(mfrow=c(1,2))
+corrplot(Cortex_corr_LDSC_MAGMA, order="hclust", type="upper", tl.cex = 0.6,tl.srt = 45,tl.col="black", hclust.method = "ward.D2", number.cex = 1.0, method ="circle")
+#grid.echo()
+#Cortex_corr <-grid.grab()
+#grid.draw(SN_corr)
+
+```
+
+
+
+
+# LDSCORE Analysis: MidBrain 25kb with DaN & GABA
+```{r get_info_results_midbrain_level1,echo=FALSE, include=F}
+list_gwa_name<-read.table(file="info_gwa_SN.txt",sep=",",h=T)
+atlas<-"SN_L1_DaNGaba"
+distance<-"25"
+dir_data<-paste("/Volumes/Seagate Backup Plus Drive/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/Final_",atlas,"_","Cell_Type_",distance,"K","_ldscores",sep="")
+list_file<-list.files(path = dir_data,pattern=".cell_type_results.txt")
+val<-paste("_SN_L1_DaNGaba_",distance,".cell_type_results.txt",sep="")
+list_name<-gsub(val,"",list_file)
+```
+
+
+
+```{r make_table_midbrain_level1_2,echo=FALSE}
+
+for (i in c(1:length(list_file))){
+  file1<-paste(dir_data,"/",list_file[i],sep="")
+  df_temp<-read.table(file1,sep="\t",h=T)
+  df_temp$GWA<-list_name[i]
+  if (i==1) {
+    df<-df_temp
+  }
+  else {
+    df<-rbind(df,df_temp)
+  }
+}
+colnames(list_gwa_name)[1]<-"GWA"
+df<-merge(list_gwa_name,df,by=c("GWA"))
+DT::datatable(df, rownames = TRUE, caption = "MidBrain atlas 25kb LDscore", escape = FALSE, extensions = 'Buttons', options = list(dom = 'ftipr'))
+
+```
+
+
+```{r make_bar_plot_ldsc_midbrain level1_3,fig.height=8,fig.width=8, echo=FALSE}
+df_red<-df[df$Exclude==0,]
+colnames(df_red)[5]<-"Cell"
+colnames(df_red)[4]<-"Category"
+colnames(df_red)[2]<-"Trait"
+colnames(df_red)[8]<-"p"
+list_cell<-unique(as.character(df_red$Cell))
+p_bon<-0.05/length(list_cell)
+
+
+df_red$Trait<- factor(df_red$Trait, levels=unique(df_red$Trait [order(df_red$Category)]))
+
+p1<-ggplot(df_red, aes(x =Trait , y = -log(p ,10),fill=Cell)) +geom_bar(stat='identity',position=position_dodge(),width = 0.8) +
+theme(text = element_text(size=10),axis.text.x = element_text(angle = 90, hjust = 1))+
+ylab("-log10(pvalue)") + xlab("") + ggtitle("SN Atlas LDScore")+ theme(plot.title = element_text(hjust = 0.5,size=12,face="bold"))+
+  
+coord_flip()+geom_hline(yintercept = -log(p_bon,10),linetype="dashed")+
+facet_grid(Category ~ ., scales = "free", space = "free")+scale_fill_manual("Cell", values = c("Microglia" = "#00BE67", "DaN" = "#F8766D", "GABA"="#330000","Astrocyte"="#CD9600","ODC"="#00BFC4","OPC"="#00A9FF","Endothelial"="#9590FF"))
+
+
+
+#tiff(filename = "/Users/dpag0499/Documents/PROJECTS/Tissue_specificity/src/figure_paper/fig1_sn.tiff", width = 3000, height = 2000,res = 300)
+p1
+#dev.off()
+#system("tiffcp -c lzw fig1_sn.tiff fig1_sn_v1.tiff")
+#system("mv fig1_sn_v1.tiff fig1_sn.tiff")
+```
+
+# MAGMA Analysis: MidBrain 25kb with DaN and GABA 
+
+```{r get_info_results_midbrain_level1_4,echo=FALSE, include=FALSE}
+list_gwa_name_magma <-read.table(file="info_gwa_magma_SN.txt",sep=",",h=T)
+#atlas<-"Midbrain_New"
+distance<-"25"
+dir_data<-paste("/Volumes/Seagate Backup Plus Drive/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/Final_",distance,"kb","_SN_DaN_GaBa_f0.1",sep="")
+list_file<-list.files(path = dir_data,pattern=".gsa.out")
+val<-paste(".txt.25UP.25DOWN.level1.SN_10x_DaN_GABA_f0.1_final.gsa.out")
+list_name<-gsub(val,"",list_file)
+
+```
+
+```{r make_table_midbrain_level1_4,echo=FALSE}
+
+for (i in c(1:length(list_file))){
+  file1<-paste(dir_data,"/",list_file[i],sep="")
+  df_temp<-read.table(file1,sep="",h=T)
+  df_temp$GWA<-list_name[i]
+  if (i==1) {
+    df<-df_temp
+  }
+  else {
+    df<-rbind(df,df_temp)
+  }
+}
+colnames(list_gwa_name_magma)[1]<-"GWA"
+df_magma<-merge(list_gwa_name_magma,df,by=c("GWA"))
+DT::datatable(df_magma, rownames = TRUE, caption = "SN Atlas MAGMA 25KB DaN subtypes", escape = FALSE, extensions = 'Buttons', options = list(dom = 'ftipr'))
+
+```
+
+
+
+```{r make_bar_plot_magma_midbrain_level1_5 ,echo=FALSE, fig.width=8, fig.height=8}
+df_red_magma <-df_magma[df_magma$Exclude==0,]
+colnames(df_red_magma)[5]<-"Cell"
+colnames(df_red_magma)[4]<-"Category"
+colnames(df_red_magma)[2]<-"Trait"
+colnames(df_red_magma)[11]<-"p_magma"
+list_cell<-unique(as.character(df_red_magma$Cell))
+p_bon<-0.05/length(list_cell)
+
+
+df_red_magma$Trait<- factor(df_red_magma$Trait, levels=unique(df_red_magma$Trait [order(df_red_magma$Category)]))
+
+#tiff(filename = "F:/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/New_figures/MAGMA_L1_DaNsubtypes.tiff", width = 3000, height = 2000,res = 300)
+p2 <-ggplot(df_red_magma, aes(x =Trait , y = -log(p_magma ,10),fill=Cell)) +geom_bar(stat='identity',position=position_dodge(),width = 0.8) +
+theme(text = element_text(size=10),axis.text.x = element_text(angle = 90, hjust = 1))+
+ylab("-log10(pvalue)") + xlab("") + ggtitle("SN Atlas MAGMA ")+ theme(plot.title = element_text(hjust = 0.5,size=12,face="bold"))+
+coord_flip()+geom_hline(yintercept = -log(p_bon,10),linetype="dashed")+
+facet_grid(Category ~ ., scales = "free", space = "free")+scale_fill_manual("Cell", values = c("Microglia" = "#00BE67", "DaN" = "#F8766D", "GABA"="#330000","Astrocyte"="#CD9600","ODC"="#00BFC4","OPC"="#00A9FF","Endothelial"="#9590FF"))
+
+
+p2
+#dev.off()
+#system("tiffcp -c lzw fig1_cortex.tiff fig1_cortex_v1.tiff")
+#system("mv fig1_cortex_v1.tiff fig1_cortex.tiff")
+```
+
+# Combined MidBrain (25KB) # FDR correction and Bonferroni Correction for both MAGMA and LDSC
+
+```{r combined_midbrain_level1_1, echo=FALSE}
+df_red <- df_red[,c(2,4,5,8)]
+
+list_trait <- as.character(unique(df_red$Trait))
+  
+ for (i in c(1:length(list_trait))){
+  file1<- subset(df_red, df_red$Trait== list_trait[i], select=1:4)
+  df_temp<- file1
+  #df_temp$pfdr_ldsc <- p.adjust(df_temp$p,method = "fdr")
+  df_temp$pbon_ldsc <- p.adjust(df_temp$p, method = "bonferroni")
+  if (i==1) {
+    df <-df_temp
+  }
+  else {
+    df<-rbind(df,df_temp)
+  }
+}
+
+df_red_ldsc <- df
+#df_red_ldsc$Method <- "LDSC"
+```
+
+```{r}
+df_red_magma <- df_red_magma[,c(2,4,5,11)]
+
+list_trait <- as.character(unique(df_red_magma$Trait))
+  
+ for (i in c(1:length(list_trait))){
+  file1<- subset(df_red_magma, df_red_magma$Trait== list_trait[i], select=1:4)
+  df_temp<- file1
+ # df_temp$pfdr_magma <- p.adjust(df_temp$p_magma,method = "fdr")
+  df_temp$pbon_magma <- p.adjust(df_temp$p_magma, method = "bonferroni")
+  if (i==1) {
+    df <-df_temp
+  }
+  else {
+    df<-rbind(df,df_temp)
+  }
+}
+
+df_red_magma <- df 
+#df_red_magma$Method <- "MAGMA"
+```
+
+# Condition for Bonferroni and nominal
+```{r}
+merged_results_SN_DaN <- merge(df_red_ldsc,df_red_magma, by.all= c("Trait","Cell"),all.x=T,all.y=T)
+#merged_results_SN_DaN <- read.delim(file="./Celltype_risk_Nigra_25kb_all_DaN_subtypes_final.txt", sep="\t",header=T)
+#p_bon<-0.05/length(list_cell)
+ #p_bon_log <- -log(p_bon,10)
+```
+
+
+
+
+```{r}
+# Condition for FDR and nominal
+#merged_results_SN$logp <- -log(merged_results_SN$p,10)
+#merged_results_SN$logp_magma <- -log(merged_results_SN$p_magma,10)
+
+#merged_results_SN$Group <- ifelse(merged_results_SN$pfdr_ldsc <= 0.05 & merged_results_SN$pfdr_magma <= 0.05,"Both FDR",
+                        #ifelse(merged_results_SN$pfdr_ldsc <= 0.05 & merged_results_SN$p_magma > 0.05 ,"LDSC FDR only",
+                        # ifelse(merged_results_SN$pfdr_ldsc <= 0.05 & merged_results_SN$p_magma <= 0.05, "LDSC FDR & nominal MAGMA",
+                        #ifelse(merged_results_SN$pfdr_magma <= 0.05 & merged_results_SN$p > 0.05, "MAGMA FDR only",
+                        #ifelse(merged_results_SN$pfdr_magma <= 0.05 & merged_results_SN$p <= 0.05 , "MAGMA FDR & nominal LDSC","NONE")))))           
+                               
+#merged_results_SN$Region <- "Substantia nigra"
+```
+
+# Condition for Bonferroni and nominal
+```{r combined_midbrain_level1_1, echo=FALSE}
+
+merged_results_SN_DaN$Methods <- ifelse(merged_results_SN_DaN$pbon_ldsc < 0.05 & merged_results_SN_DaN$pbon_magma < 0.05,"Both**",
+                                ifelse(merged_results_SN_DaN$pbon_ldsc < 0.05 & merged_results_SN_DaN$p_magma >= 0.05,"LDSC**",
+                                ifelse(merged_results_SN_DaN$pbon_ldsc < 0.05 & merged_results_SN_DaN$p_magma < 0.05,"LDSC** & MAGMA*",
+                                ifelse(merged_results_SN_DaN$pbon_magma < 0.05 & merged_results_SN_DaN$p >= 0.05,"MAGMA**",
+                                ifelse(merged_results_SN_DaN$pbon_magma < 0.05 & merged_results_SN_DaN$p< 0.05,"MAGMA** & LDSC*","NONE")))))
+
+
+                               
+merged_results_SN_DaN$Region <- "Substantia nigra" 
+#ibrary(dplyr)
+library(data.table)
+setnames(merged_results_SN_DaN, "p", "p_ldsc")
+#merged_results_SN_DaN <- merged_results_SN_DaN[ ,-c(6,8)]
+
+levels(merged_results_SN_DaN$Category)[levels(merged_results_SN_DaN$Category)=="Psychatric disorder"] <- "Psychiatric disorder"
+#levels(merged_results_SN_DaN$Cell)[levels(merged_results_SN_DaN$Cell)=="DaNeurons_GT_DAT_low"] <- "GABAergic neurons"
+                               
+write.table(merged_results_SN_DaN, file="Celltype_risk_Nigra_25kb_all_DaN_subtypes_Final.txt", sep="\t", quote=F)
+```
+
+
+# SN tile plot bonferroni and nominal DaN  and GABA 
+```{r combined_midbrain_level1_2,fig.height=3,fig.width=7.1,echo=FALSE}
+merged_results_SN_1 <- merged_results_SN_DaN
+merged_results_SN_1$Methods <- gsub("NONE","", merged_results_SN_1$Methods)
+
+par(bg="transparent")
+SN_tile_1 <- ggplot(merged_results_SN_1, aes(Trait,Cell, fill=Methods))
+SN_tile_1 <- SN_tile_1 + geom_tile()
+SN_tile_1 <- SN_tile_1 + scale_fill_manual(breaks= c("Both**","LDSC** & MAGMA*","LDSC**","MAGMA** & LDSC*","MAGMA**"), values=c("Both**"="#20B2AA","LDSC** & MAGMA*"="#3B0F70FF","LDSC**"="#8C2981FF", "MAGMA**"="#FE9F6DFF","MAGMA** & LDSC*"="#DE4968FF"))
+#SN_tile_1 <- SN_tile_1 + scale_fill_viridis_d(option="magma")
+SN_tile_1 <- SN_tile_1 + theme(axis.text.x = element_text(angle =45,vjust=1, hjust = 1, size=6))
+SN_tile_1 <- SN_tile_1 + theme(axis.text.y = element_text(size=6))
+SN_tile_1 <- SN_tile_1 + theme(legend.text  = element_text(size=6))
+SN_tile_1 <- SN_tile_1 + theme(legend.title = element_text(size=6))
+SN_tile_1 <- SN_tile_1 + theme(panel.background = element_rect(fill = "#FCFDBFFF",colour = "#FCFDBFFF"), panel.grid.major = element_blank())
+#SN_tile <- SN_tile + theme(legend.position='none')
+SN_tile_1 <- SN_tile_1 +  ggtitle("Substantia nigra cell type associations for complex traits")+ theme(plot.title = element_text(hjust = 0.5,size=7,face="bold"))
+#SN_tile <- SN_tile + geom_raster()
+SN_tile_1 <-  SN_tile_1 + facet_grid(. ~ Category, scales = "free", space = "free", shrink = F) 
+SN_tile_1 <- SN_tile_1 + theme(strip.background = element_blank(), strip.text.x = element_text(size=5, face = "bold"))
+SN_tile_1 <- SN_tile_1 + xlab("") + ylab("")
+SN_tile_1 <- SN_tile_1 + theme(plot.margin = unit(c(0, 0, 0, 0), "cm"))
+SN_tile_1
+```
+
+# plot multipanel for cell type risk associations
+
+
+```{r, fig.height=22, fig.width=14,}
+library(gridExtra)
+library(cowplot)
+#grid.newpage()
+#tiff(filename="F:/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/New_figures/26th_April_figure2_FDRCorrection_colorscheme1.tiff",height =15.24,width =17.8,res = 300, units="cm")
+#plot_grid(SN_tile,Cortex_tile, align = "v", nrow = 2, labels = c("A","B"), label_size = 12, rel_heights = c(1,1), rel_widths = c(1.2,1.2) )
+
+
+tiff(filename="/Volumes/Seagate Backup Plus Drive/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/New_figures/Cell_type_risk_SN_Cortex_25kb_old_multipanel_bonferroni_020919.tiff",height =15.24,width =17.8,res = 300, units="cm")
+
+cairo_pdf(file="/Volumes/Seagate Backup Plus Drive/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/New_figures/Final_Figure2.pdf",height =6,width =7.1)
+
+
+cairo_ps(file="/Volumes/Seagate Backup Plus Drive/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/New_figures/Final_Figure2.eps",height =6,width =7.1)
+plot_grid(SN_tile_1,Cortex_tile_1, align = "v", nrow = 2, labels = c("a","b"), label_size = 12, rel_heights = c(1,1), rel_widths = c(1,1) )
+
+```
+
+
+
+
+
+# Spearman Correlation: LDSC vs MAGMA SN
+
+```{r ldsc_cortex level1_9, echo=FALSE,include=FALSE}
+SN_merged <-  merge(df_red_ldsc,df_red_magma, by.all= c("Trait","Cell"),all.x=T,all.y=T)
+SN_merged$logp_magma <- -log(SN_merged$p_magma,10)
+SN_merged <- SN_merged %>% group_by(Trait)%>% mutate(rank_magma=rank(logp_magma, ties.method="first"))
+
+SN_merged$logp_ldsc <- -log(SN_merged$p,10)
+SN_merged <- SN_merged %>% group_by(Trait)%>% mutate(rank_ldsc=rank(logp_ldsc, ties.method="first"))
+
+res3 <-cor.test(SN_merged$logp_magma, SN_merged$logp_ldsc,  method = "spearman")
+res3
+
+res3 <-cor.test(SN_merged$rank_ldsc, SN_merged$rank_magma,  method = "spearman")
+res3
+
+#df_red<-df[df$Exclude==0,]
+#df_red <- df_red[,c(2,5,8)]
+library(dplyr)
+df_red_ldsc$logp <- -log(df_red_ldsc$p,10)
+#df_red_ldsc <- df_red_ldsc %>% group_by(Trait) %>% mutate(rank_ldsc=rank(logp,ties.method = "first"))
+df_red_ldsc <- df_red_ldsc[,-c(2,4,5)]
+
+library(tidyr)
+SN_ldscore_wide <- spread(df_red_ldsc,Trait,logp)
+SN_ldscore_wide <- as.data.frame(SN_ldscore_wide)
+rownames(SN_ldscore_wide) <- SN_ldscore_wide$Cell
+SN_ldscore_wide <- SN_ldscore_wide[,-1]
+```
+
+```{r magma_cortex level1_10, echo=FALSE, include=F}
+#rownames(df_red) <- df_red$Name
+#df_red_magma <-df_magma[df_magma$Exclude==0,]
+#df_red_magma <- df_red_magma[,c(1,3,4)]
+#library(dplyr)
+df_red_magma$logp <- -log(df_red_magma$p_magma,10)
+#df_red_magma <- df_red_magma[,c(2,5,12)]
+#df_red_magma <- df_red_magma %>% group_by(Trait) %>% mutate(rank_magma=rank(logp,ties.method = "first"))
+df_red_magma <- df_red_magma[,-c(2,4,5)]
+#library(tidyr)
+SN_magma_wide <- spread(df_red_magma,Trait,logp)
+SN_magma_wide <- as.data.frame(SN_magma_wide)
+rownames(SN_magma_wide) <- SN_magma_wide$Cell
+SN_magma_wide <- SN_magma_wide[,-c(1)]
+```
+
+
+
+```{r corr_cortex level1_11, echo=FALSE, warning=FALSE, include=FALSE}
+library(psych)
+cor_1 <- corr.test(SN_ldscore_wide, SN_magma_wide[,match(colnames(SN_ldscore_wide),colnames(SN_magma_wide))], method="spearman", adjust="none")
+SN_corr_LDSC_MAGMA <- as.data.frame(cor_1$r)
+#write.table(SN_Cortex_corr_LDSC_MAGMA, file="SN_Cortex_corr_LDSC_MAGMA.txt", sep="\t", quote=F)
+```
+
+```{r, spearman_cortex level1_12, echo=FALSE, fig.height=4, fig.width=7, echo=FALSE, warning=FALSE}
+library(corrplot)
+SN_corr_LDSC_MAGMA <- as.matrix(SN_corr_LDSC_MAGMA)
+#tiff(filename ="/Volumes/Seagate Backup Plus Drive/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/New_figures/SN_Cortex_ldscore_magma_corrplot_log10p.tiff", width = 7, height = 4,res = 300, units= "in")
+par(xpd=TRUE, cex=0.6)
+corrplot(SN_corr_LDSC_MAGMA, order="hclust", type="upper", tl.cex = 0.8,tl.srt = 45,tl.col="black", hclust.method = "ward.D2", number.cex = 1.0, method ="circle", mar = c(0,0,6,0))
+library(gridGraphics)
+grid.echo()
+SN_corr <-grid.grab()
+grid.draw(SN_corr)
+
+
+# save correlation matrix colors to a vector, then make coloured matrix grob transparent
+matrix.colors <- getGrob(SN_corr, gPath("circle"), grep = TRUE)[["gp"]][["fill"]]
+SN_corr <- editGrob(SN_corr,gPath("circle"), grep = TRUE,
+               gp = gpar(col = NA,
+                        fill = NA))
+
+# apply the saved colours to the underlying matrix grob
+SN_corr <- editGrob(SN_corr,
+               gPath("symbols-rect-1"), grep = TRUE,
+               gp = gpar(fill = matrix.colors))
+
+# convert the background fill from white to transparent, while we are at it
+SN_corr <- editGrob(SN_corr,
+               gPath("background"), grep = TRUE,
+               gp = gpar(fill = NA))
+
+
+corrplot(Cortex_corr_LDSC_MAGMA, order="hclust", type="upper", tl.cex = 0.8,tl.srt = 45,tl.col="black", hclust.method = "ward.D2", number.cex = 0.5, method ="circle",mar = c(0,0,6,0))
+
+library(gridGraphics)
+grid.echo()
+Cor_corr <-grid.grab()
+grid.draw(Cor_corr)
+
+
+# save correlation matrix colors to a vector, then make coloured matrix grob transparent
+matrix.colors <- getGrob(Cor_corr, gPath("circle"), grep = TRUE)[["gp"]][["fill"]]
+Cor_corr <- editGrob(Cor_corr,gPath("circle"), grep = TRUE,
+               gp = gpar(col = NA,
+                        fill = NA))
+
+# apply the saved colours to the underlying matrix grob
+Cor_corr <- editGrob(Cor_corr,
+               gPath("symbols-rect-1"), grep = TRUE,
+               gp = gpar(fill = matrix.colors))
+
+# convert the background fill from white to transparent, while we are at it
+Cor_corr <- editGrob(Cor_corr,
+               gPath("background"), grep = TRUE,
+               gp = gpar(fill = NA))
+
+
+
+library(gridExtra)
+library(cowplot)
+#grid.newpage()
+
+
+tiff(filename ="/Volumes/Seagate Backup Plus Drive/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/New_figures/SN_Cortex_ldscore_magma_corrplot_log10p.tiff", width = 7.8, height = 9,res = 300, units= "in")
+plot_grid( SN_corr,Cor_corr,align = "hv", labels = "auto", label_size = 8, nrow   = 2,rel_heights = c(0.8,0.8))
+
+
+#corrplot(Cortex_corr_LDSC_MAGMA, order="hclust", type="upper", tl.cex = 0.6,tl.srt = 45,tl.col="black", hclust.method = "ward.D2", number.cex = 1.0, method ="circle")
+#corrplot(SN_corr_LDSC_MAGMA, order="hclust", type="upper", tl.cex = 0.6,tl.srt = 45,tl.col="black", hclust.method = "ward.D2", number.cex = 1.0, method ="circle",mar=c(0,0,0,0))
+#grid.echo()
+#Cortex_corr <-grid.grab()
+#grid.draw(SN_corr)
+
+```
+
+
+
+
+# Cortex & SN Speraman correlation graphs
+```{r, spearman_cortex level1_12, echo=FALSE, fig.height=4, fig.width=7, echo=FALSE, warning=FALSE}
+library(corrplot)
+Cortex_corr_LDSC_MAGMA <- as.matrix(Cortex_corr_LDSC_MAGMA)
+#tiff(filename ="F:/Oxford_postdoc/Cell_type_risk_skene/Corrplot_Cortex_SN_joint/SN_Cortex_ldscore_magma_corrplot_log10p.tiff", width = 18, height = 14,res = 300, units= "in")
+par(mfrow=c(1,2))
+corrplot(Cortex_corr_LDSC_MAGMA, order="hclust", type="upper", tl.cex = 0.6,tl.srt = 45,tl.col="black", hclust.method = "ward.D2", number.cex = 1.0, method ="circle")
+#grid.echo()
+#Cortex_corr <-grid.grab()
+#grid.draw(SN_corr)
+
+```
+
+# GTEx Brain  Tissue 25KB LDScore
+
+```{r get_info_results_gtex_brain_level1_1,echo=FALSE}
+list_gwa_name<-read.table(file="info_gwa_SN_level2.txt",sep=",",h=T)
+atlas<-"GTEx_Brain2"
+distance<-"25"
+dir_data<-paste("F:/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/GTEx_multitraits_",atlas,"_",distance,"K",sep="")
+list_file<-list.files(path = dir_data,pattern=".cell_type_results.txt")
+val<-paste("_","GTEx_Brain2_",distance,"k.cell_type_results.txt",sep="")
+list_name<-gsub(val,"",list_file)
+```
+
+```{r make_table_gtex_brain_level1_2,echo=FALSE}
+
+for (i in c(1:length(list_file))){
+  file1<-paste(dir_data,"/",list_file[i],sep="")
+  df_temp<-read.table(file1,sep="\t",h=T)
+  df_temp$GWA<-list_name[i]
+  if (i==1) {
+    df<-df_temp
+  }
+  else {
+    df<-rbind(df,df_temp)
+  }
+}
+colnames(list_gwa_name)[1]<-"GWA"
+df<-merge(list_gwa_name,df,by=c("GWA"))
+DT::datatable(df, rownames = TRUE, caption = "GTEx Brain atlas 25KB LDscore", escape = FALSE, extensions = 'Buttons', options = list(dom = 'ftipr'))
+
+```
+
+```{r make_bar_plot_ldsc_gtex_brain level1_3,fig.height=10,fig.width=12, echo=FALSE}
+df_red<-df[df$Exclude==0,]
+colnames(df_red)[5]<-"Cell"
+colnames(df_red)[4]<-"Category"
+colnames(df_red)[2]<-"Trait"
+colnames(df_red)[8]<-"p"
+list_cell<-unique(as.character(df_red$Cell))
+p_bon<-0.05/length(list_cell)
+
+
+df_red$Trait<- factor(df_red$Trait, levels=unique(df_red$Trait [order(df_red$Category)]))
+
+p1<-ggplot(df_red, aes(x =Trait , y = -log(p ,10),fill=Cell)) +geom_bar(stat='identity',position=position_dodge(),width = 0.8) +
+theme(text = element_text(size=10),axis.text.x = element_text(angle = 90, hjust = 1))+
+ylab("-log10(pvalue)") + xlab("") + ggtitle("GTEx Atlas LDScore")+ theme(plot.title = element_text(hjust = 0.5,size=12,face="bold"))+
+  
+coord_flip()+geom_hline(yintercept = -log(p_bon,10),linetype="dashed")+
+facet_grid(Category ~ ., scales = "free", space = "free")+ scale_fill_discrete()
+
+
+
+#tiff(filename = "/Users/dpag0499/Documents/PROJECTS/Tissue_specificity/src/figure_paper/fig1_sn.tiff", width = 3000, height = 2000,res = 300)
+p1
+#dev.off()
+#system("tiffcp -c lzw fig1_sn.tiff fig1_sn_v1.tiff")
+#system("mv fig1_sn_v1.tiff fig1_sn.tiff")
+```
+
+# MAGMA Analysis: GTEx Brain Tissue 25kb
+
+```{r get_info_results_gtexbrain_level1_4,echo=FALSE, include=FALSE}
+list_gwa_name_magma <-read.table(file="info_gwa_magma_GTEx_brain.txt",sep=",",h=T)
+#atlas<-"Midbrain_New"
+distance<-"25"
+dir_data<-paste("F:/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/",distance,"KB","_GTEx_brain",sep="")
+list_file<-list.files(path = dir_data,pattern=".25UP.25DOWN.level1.GTEx_Brain.gsa.out")
+val<-paste(".25UP.25DOWN.level1.GTEx_Brain.gsa.out",sep="")
+list_name<-gsub(val,"",list_file)
+```
+
+```{r make_table_gtexbrain_level1_4,echo=FALSE}
+
+for (i in c(1:length(list_file))){
+  file1<-paste(dir_data,"/",list_file[i],sep="")
+  df_temp<-read.table(file1,sep="",h=T)
+  df_temp$GWA<-list_name[i]
+  if (i==1) {
+    df<-df_temp
+  }
+  else {
+    df<-rbind(df,df_temp)
+  }
+}
+colnames(list_gwa_name_magma)[1]<-"GWA"
+df_magma<-merge(list_gwa_name_magma,df,by=c("GWA"))
+DT::datatable(df_magma, rownames = TRUE, caption = "GTEx Atlas MAGMA", escape = FALSE, extensions = 'Buttons', options = list(dom = 'ftipr'))
+
+```
+
+
+```{r make_bar_plot_magma_gtexbrain_level1_5 ,echo=FALSE, fig.width=10, fig.height=8}
+df_red_magma <-df_magma[df_magma$Exclude==0,]
+colnames(df_red_magma)[5]<-"Cell"
+colnames(df_red_magma)[4]<-"Category"
+colnames(df_red_magma)[2]<-"Trait"
+colnames(df_red_magma)[11]<-"p_magma"
+list_cell<-unique(as.character(df_red_magma$Cell))
+p_bon<-0.05/length(list_cell)
+
+
+df_red_magma$Trait<- factor(df_red_magma$Trait, levels=unique(df_red_magma$Trait [order(df_red_magma$Category)]))
+
+#tiff(filename ="F:/Oxford_postdoc/Cell_type_risk_skene/Figure_SN_new/fig1_SN_25kb_new.tiff", width = 3000, height = 2000,res = 300)
+p2 <-ggplot(df_red_magma, aes(x =Trait , y = -log(p_magma ,10),fill=Cell)) +geom_bar(stat='identity',position=position_dodge(),width = 0.8) +
+theme(text = element_text(size=10),axis.text.x = element_text(angle = 90, hjust = 1))+
+ylab("-log10(pvalue)") + xlab("") + ggtitle("GTEx braint tissue Atlas MAGMA ")+ theme(plot.title = element_text(hjust = 0.5,size=12,face="bold"))+
+coord_flip()+geom_hline(yintercept = -log(p_bon,10),linetype="dashed")+
+facet_grid(Category ~ ., scales = "free", space = "free")+scale_fill_discrete()
+p2
+#dev.off()
+#system("tiffcp -c lzw fig1_cortex.tiff fig1_cortex_v1.tiff")
+#system("mv fig1_cortex_v1.tiff fig1_cortex.tiff")
+```
+
+
+# Gtex brain (25KB) Bonferroni Correction for both MAGMA and LDSC
+
+```{r Gtex_brain_level5, echo=FALSE}
+df_red <- df_red[,c(2,4,5,8)]
+
+list_trait <- as.character(unique(df_red$Trait))
+  
+ for (i in c(1:length(list_trait))){
+  file1<- subset(df_red, df_red$Trait== list_trait[i], select=1:4)
+  df_temp<- file1
+  #df_temp$pfdr_ldsc <- p.adjust(df_temp$p,method = "fdr")
+  df_temp$pbon_ldsc <- p.adjust(df_temp$p, method = "bonferroni")
+  if (i==1) {
+    df <-df_temp
+  }
+  else {
+    df<-rbind(df,df_temp)
+  }
+}
+
+df_red_ldsc_gtex <- df
+
+```
+
+```{r Gtex_brain_level_6, echo=FALSE}
+df_red_magma <- df_red_magma[,c(2,4,5,11)]
+
+list_trait <- as.character(unique(df_red_magma$Trait))
+  
+ for (i in c(1:length(list_trait))){
+  file1<- subset(df_red_magma, df_red_magma$Trait== list_trait[i], select=1:4)
+  df_temp<- file1
+  #df_temp$pfdr_magma <- p.adjust(df_temp$p_magma,method = "fdr")
+  df_temp$pbon_magma <- p.adjust(df_temp$p_magma, method = "bonferroni")
+  if (i==1) {
+    df <-df_temp
+  }
+  else {
+    df<-rbind(df,df_temp)
+  }
+}
+
+df_red_magma_gtex <- df 
+```
+
+# Condition for FDR and nominal
+```{r gtex_brain_leve7}
+merged_results_GTEX <- merge(df_red_ldsc_gtex,df_red_magma_gtex, by.all= c("Trait","Cell"),all.x=T,all.y=T)
+#merged_results_Cortex <- merged_results_Cortex %>%
+   #mutate_at(vars(p_magma, pbon_magma, pfdr_magma), ~replace_na(., -1))
+#p_bon<-0.05/length(list_cell)
+ #p_bon_log <- -log(p_bon,10)
+```
+
+
+```{r gtex_brain_level8, echo=FALSE}
+merged_results_GTEX$Methods <- ifelse(merged_results_GTEX$pbon_ldsc <= 0.05 & merged_results_GTEX$pbon_magma <= 0.05,"Both**",
+                        ifelse(merged_results_GTEX$pbon_ldsc <= 0.05 & merged_results_GTEX$p_magma > 0.05 ,"LDSC**",
+                         ifelse(merged_results_GTEX$pbon_ldsc <= 0.05 & merged_results_GTEX$p_magma <= 0.05, "LDSC** & MAGMA*",
+                        ifelse(merged_results_GTEX$pbon_magma <= 0.05 & merged_results_GTEX$p > 0.05, "MAGMA**",
+                        ifelse(merged_results_GTEX$pbon_magma <= 0.05 & merged_results_GTEX$p <= 0.05 , "MAGMA** & LDSC*","NONE")))))           
+                               
+merged_results_GTEX$Region <- "GTEX brain tissue"           
+                               
+write.table(merged_results_GTEX, file="Celltype_risk_GTEX_brain_25kb_all.txt", sep="\t", quote=F)
+```
+
+
+
+
+
+
+# GTex Bonferroni and nominal tile plot 
+
+```{r gtex_brain_2, fig.height=4, fig.width=7.1, echo=FALSE}
+merged_results_GTEX_1 <- merged_results_GTEX
+merged_results_GTEX_1$Methods <- gsub("NONE","", merged_results_GTEX_1$Methods)
+tiff(filename="F:/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/New_figures/GTEx_brain_tissue_heatmap.tiff",height =4,width =7.1,res = 300, units="in")
+GTEX_tile <- ggplot(merged_results_GTEX_1, aes(Trait,Cell,fill=Methods))
+GTEX_tile <- GTEX_tile + geom_tile()
+#Cortex_tile_1 <- Cortex_tile_1 + scale_fill_viridis_d(option = "magma")
+GTEX_tile <- GTEX_tile + scale_fill_manual(breaks= c("Both**","LDSC** & MAGMA*","LDSC**","MAGMA** & LDSC*","MAGMA**"), values=c("Both**"="#20B2AA","LDSC** & MAGMA*"="#3B0F70FF","LDSC**"="#8C2981FF", "MAGMA**"="#FE9F6DFF","MAGMA** & LDSC*"="#DE4968FF" ,"#FCFDBFFF"))
+GTEX_tile <- GTEX_tile + theme(axis.text.x = element_text(angle =45,vjust=1, hjust = 1, size=6))
+GTEX_tile <- GTEX_tile + theme(axis.text.y = element_text(size=6))
+GTEX_tile <- GTEX_tile + theme(legend.text  = element_text(size=6))
+GTEX_tile <- GTEX_tile + theme(legend.title = element_text(size=6))
+#Cortex_tile <- Cortex_tile + theme(axis.text.y = element_text(size=11))
+#Cortex_tile <- Cortex_tile + theme(legend.position='none')
+GTEX_tile <- GTEX_tile +  ggtitle("GTEx brain tissue associations for complex traits")+ theme(plot.title = element_text(hjust = 0.5,size=7,face="bold"))
+GTEX_tile <- GTEX_tile + facet_grid(. ~ Category, scales = "free", space = "free", shrink = F) 
+GTEX_tile <- GTEX_tile + theme(strip.background = element_blank(), strip.text.x = element_text(size=5, face = "bold"))
+#p3 <- p3 + geom_raster()
+GTEX_tile <- GTEX_tile + xlab("") + ylab("")
+GTEX_tile
+```
+
+
+# SN DaN subtype tile plot without sample 3 amyloid patient
+# LDscore method
+```{r get_info_results_midbrain_level1,echo=FALSE, include=F}
+list_gwa_name<-read.table(file="info_gwa_SN.txt",sep=",",h=T)
+atlas<-"SN_L1_amy_DaNGaba"
+distance<-"25"
+dir_data<-paste("/Volumes/Seagate Backup Plus Drive/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/Final_",atlas,"_","Cell_Type_",distance,"K","_ldscores",sep="")
+list_file<-list.files(path = dir_data,pattern=".cell_type_results.txt")
+val<-paste("_SN_L1_amy_DaNGaba_",distance,".cell_type_results.txt",sep="")
+list_name<-gsub(val,"",list_file)
+```
+
+
+
+```{r make_table_midbrain_level1_2,echo=FALSE}
+
+for (i in c(1:length(list_file))){
+  file1<-paste(dir_data,"/",list_file[i],sep="")
+  df_temp<-read.table(file1,sep="\t",h=T)
+  df_temp$GWA<-list_name[i]
+  if (i==1) {
+    df<-df_temp
+  }
+  else {
+    df<-rbind(df,df_temp)
+  }
+}
+colnames(list_gwa_name)[1]<-"GWA"
+df<-merge(list_gwa_name,df,by=c("GWA"))
+DT::datatable(df, rownames = TRUE, caption = "MidBrain atlas 25kb LDscore", escape = FALSE, extensions = 'Buttons', options = list(dom = 'ftipr'))
+
+```
+
+
+```{r make_bar_plot_ldsc_midbrain level1_3,fig.height=8,fig.width=8, echo=FALSE}
+df_red<-df[df$Exclude==0,]
+colnames(df_red)[5]<-"Cell"
+colnames(df_red)[4]<-"Category"
+colnames(df_red)[2]<-"Trait"
+colnames(df_red)[8]<-"p"
+list_cell<-unique(as.character(df_red$Cell))
+p_bon<-0.05/length(list_cell)
+
+
+df_red$Trait<- factor(df_red$Trait, levels=unique(df_red$Trait [order(df_red$Category)]))
+
+p1<-ggplot(df_red, aes(x =Trait , y = -log(p ,10),fill=Cell)) +geom_bar(stat='identity',position=position_dodge(),width = 0.8) +
+theme(text = element_text(size=10),axis.text.x = element_text(angle = 90, hjust = 1))+
+ylab("-log10(pvalue)") + xlab("") + ggtitle("SN Atlas LDScore")+ theme(plot.title = element_text(hjust = 0.5,size=12,face="bold"))+
+  
+coord_flip()+geom_hline(yintercept = -log(p_bon,10),linetype="dashed")+
+facet_grid(Category ~ ., scales = "free", space = "free")+scale_fill_manual("Cell", values = c("Microglia" = "#00BE67", "DaN" = "#F8766D", "GABA"="#330000","Astrocyte"="#CD9600","ODC"="#00BFC4","OPC"="#00A9FF","Endothelial"="#9590FF"))
+
+
+
+#tiff(filename = "/Users/dpag0499/Documents/PROJECTS/Tissue_specificity/src/figure_paper/fig1_sn.tiff", width = 3000, height = 2000,res = 300)
+p1
+#dev.off()
+#system("tiffcp -c lzw fig1_sn.tiff fig1_sn_v1.tiff")
+#system("mv fig1_sn_v1.tiff fig1_sn.tiff")
+```
+
+# MAGMA Analysis: MidBrain 25kb with DaN subtypes
+
+```{r get_info_results_midbrain_level1_4,echo=FALSE, include=FALSE}
+list_gwa_name_magma <-read.table(file="info_gwa_magma_SN.txt",sep=",",h=T)
+#atlas<-"Midbrain_New"
+distance<-"25"
+dir_data<-paste("/Volumes/Seagate Backup Plus Drive/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/Final_",distance,"kb","_SN_DaN_GaBa_amy_f0.1",sep="")
+list_file<-list.files(path = dir_data,pattern=".gsa.out")
+val<-paste(".txt.25UP.25DOWN.level1.SN_10x_DaN_GABA_amy_f0.1_final.gsa.out")
+list_name<-gsub(val,"",list_file)
+
+```
+
+```{r make_table_midbrain_level1_4,echo=FALSE}
+
+for (i in c(1:length(list_file))){
+  file1<-paste(dir_data,"/",list_file[i],sep="")
+  df_temp<-read.table(file1,sep="",h=T)
+  df_temp$GWA<-list_name[i]
+  if (i==1) {
+    df<-df_temp
+  }
+  else {
+    df<-rbind(df,df_temp)
+  }
+}
+colnames(list_gwa_name_magma)[1]<-"GWA"
+df_magma<-merge(list_gwa_name_magma,df,by=c("GWA"))
+DT::datatable(df_magma, rownames = TRUE, caption = "SN Atlas MAGMA 25KB DaN subtypes", escape = FALSE, extensions = 'Buttons', options = list(dom = 'ftipr'))
+
+```
+
+
+
+```{r make_bar_plot_magma_midbrain_level1_5 ,echo=FALSE, fig.width=8, fig.height=8}
+df_red_magma <-df_magma[df_magma$Exclude==0,]
+colnames(df_red_magma)[5]<-"Cell"
+colnames(df_red_magma)[4]<-"Category"
+colnames(df_red_magma)[2]<-"Trait"
+colnames(df_red_magma)[11]<-"p_magma"
+list_cell<-unique(as.character(df_red_magma$Cell))
+p_bon<-0.05/length(list_cell)
+
+
+df_red_magma$Trait<- factor(df_red_magma$Trait, levels=unique(df_red_magma$Trait [order(df_red_magma$Category)]))
+
+#tiff(filename = "F:/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/New_figures/MAGMA_L1_DaNsubtypes.tiff", width = 3000, height = 2000,res = 300)
+p2 <-ggplot(df_red_magma, aes(x =Trait , y = -log(p_magma ,10),fill=Cell)) +geom_bar(stat='identity',position=position_dodge(),width = 0.8) +
+theme(text = element_text(size=10),axis.text.x = element_text(angle = 90, hjust = 1))+
+ylab("-log10(pvalue)") + xlab("") + ggtitle("SN Atlas MAGMA ")+ theme(plot.title = element_text(hjust = 0.5,size=12,face="bold"))+
+coord_flip()+geom_hline(yintercept = -log(p_bon,10),linetype="dashed")+
+facet_grid(Category ~ ., scales = "free", space = "free")+scale_fill_manual("Cell", values = c("Microglia" = "#00BE67", "DaN" = "#F8766D", "GABA"="#330000","Astrocyte"="#CD9600","ODC"="#00BFC4","OPC"="#00A9FF","Endothelial"="#9590FF"))
+
+
+p2
+#dev.off()
+#system("tiffcp -c lzw fig1_cortex.tiff fig1_cortex_v1.tiff")
+#system("mv fig1_cortex_v1.tiff fig1_cortex.tiff")
+```
+
+# Combined MidBrain (25KB) # FDR correction and Bonferroni Correction for both MAGMA and LDSC
+
+```{r combined_midbrain_level1_1, echo=FALSE}
+df_red <- df_red[,c(2,4,5,8)]
+
+list_trait <- as.character(unique(df_red$Trait))
+  
+ for (i in c(1:length(list_trait))){
+  file1<- subset(df_red, df_red$Trait== list_trait[i], select=1:4)
+  df_temp<- file1
+  #df_temp$pfdr_ldsc <- p.adjust(df_temp$p,method = "fdr")
+  df_temp$pbon_ldsc <- p.adjust(df_temp$p, method = "bonferroni")
+  if (i==1) {
+    df <-df_temp
+  }
+  else {
+    df<-rbind(df,df_temp)
+  }
+}
+
+df_red_ldsc <- df
+#df_red_ldsc$Method <- "LDSC"
+```
+
+```{r}
+df_red_magma <- df_red_magma[,c(2,4,5,11)]
+
+list_trait <- as.character(unique(df_red_magma$Trait))
+  
+ for (i in c(1:length(list_trait))){
+  file1<- subset(df_red_magma, df_red_magma$Trait== list_trait[i], select=1:4)
+  df_temp<- file1
+ # df_temp$pfdr_magma <- p.adjust(df_temp$p_magma,method = "fdr")
+  df_temp$pbon_magma <- p.adjust(df_temp$p_magma, method = "bonferroni")
+  if (i==1) {
+    df <-df_temp
+  }
+  else {
+    df<-rbind(df,df_temp)
+  }
+}
+
+df_red_magma <- df 
+#df_red_magma$Method <- "MAGMA"
+```
+
+# Condition for Bonferroni and nominal
+```{r}
+merged_results_SN_DaN_amy <- merge(df_red_ldsc,df_red_magma, by.all= c("Trait","Cell"),all.x=T,all.y=T)
+#merged_results_SN_DaN <- read.delim(file="./Celltype_risk_Nigra_25kb_all_DaN_subtypes_final.txt", sep="\t",header=T)
+#p_bon<-0.05/length(list_cell)
+ #p_bon_log <- -log(p_bon,10)
+```
+
+
+
+
+```{r}
+# Condition for FDR and nominal
+#merged_results_SN$logp <- -log(merged_results_SN$p,10)
+#merged_results_SN$logp_magma <- -log(merged_results_SN$p_magma,10)
+
+#merged_results_SN$Group <- ifelse(merged_results_SN$pfdr_ldsc <= 0.05 & merged_results_SN$pfdr_magma <= 0.05,"Both FDR",
+                        #ifelse(merged_results_SN$pfdr_ldsc <= 0.05 & merged_results_SN$p_magma > 0.05 ,"LDSC FDR only",
+                        # ifelse(merged_results_SN$pfdr_ldsc <= 0.05 & merged_results_SN$p_magma <= 0.05, "LDSC FDR & nominal MAGMA",
+                        #ifelse(merged_results_SN$pfdr_magma <= 0.05 & merged_results_SN$p > 0.05, "MAGMA FDR only",
+                        #ifelse(merged_results_SN$pfdr_magma <= 0.05 & merged_results_SN$p <= 0.05 , "MAGMA FDR & nominal LDSC","NONE")))))           
+                               
+#merged_results_SN$Region <- "Substantia nigra"
+```
+
+# Condition for Bonferroni and nominal
+```{r combined_midbrain_level1_1, echo=FALSE}
+
+merged_results_SN_DaN_amy$Methods <- ifelse(merged_results_SN_DaN_amy$pbon_ldsc < 0.05 & merged_results_SN_DaN_amy$pbon_magma < 0.05,"Both**",
+                                ifelse(merged_results_SN_DaN_amy$pbon_ldsc < 0.05 & merged_results_SN_DaN_amy$p_magma >= 0.05,"LDSC**",
+                                ifelse(merged_results_SN_DaN_amy$pbon_ldsc < 0.05 & merged_results_SN_DaN_amy$p_magma < 0.05,"LDSC** & MAGMA*",
+                                ifelse(merged_results_SN_DaN_amy$pbon_magma < 0.05 & merged_results_SN_DaN_amy$p >= 0.05,"MAGMA**",
+                                ifelse(merged_results_SN_DaN_amy$pbon_magma < 0.05 & merged_results_SN_DaN_amy$p< 0.05,"MAGMA** & LDSC*","NONE")))))
+
+
+                               
+merged_results_SN_DaN_amy$Region <- "Substantia nigra" 
+#ibrary(dplyr)
+library(data.table)
+setnames(merged_results_SN_DaN_amy, "p", "p_ldsc")
+#merged_results_SN_DaN <- merged_results_SN_DaN[ ,-c(6,8)]
+
+#levels(merged_results_SN_DaN$Cell)[levels(merged_results_SN_DaN$Cell)=="DaNeurons_AT_DAT_high"] <- "DaNs"
+#levels(merged_results_SN_DaN$Cell)[levels(merged_results_SN_DaN$Cell)=="DaNeurons_GT_DAT_low"] <- "GABAergic neurons"
+                               
+write.table(merged_results_SN_DaN_amy, file="Celltype_risk_Nigra_25kb_all_DaNGABA_amy_Final.txt", sep="\t", quote=F)
+```
+
+
+# SN tile plot bonferroni and nominal Level 1 DaN subtypes
+```{r combined_midbrain_level1_2,fig.height=3,fig.width=7.1,echo=FALSE}
+merged_results_SN_1 <- merged_results_SN_DaN_amy
+merged_results_SN_1$Methods <- gsub("NONE","", merged_results_SN_1$Methods)
+
+par(bg="transparent")
+SN_tile_2 <- ggplot(merged_results_SN_1, aes(Trait,Cell, fill=Methods))
+SN_tile_2 <- SN_tile_2 + geom_tile()
+SN_tile_2 <- SN_tile_2 + scale_fill_manual(breaks= c("Both**","LDSC** & MAGMA*","LDSC**","MAGMA** & LDSC*","MAGMA**"), values=c("Both**"="#20B2AA","LDSC** & MAGMA*"="#3B0F70FF","LDSC**"="#8C2981FF", "MAGMA**"="#FE9F6DFF","MAGMA** & LDSC*"="#DE4968FF" ,"#FCFDBFFF"))
+#SN_tile_1 <- SN_tile_1 + scale_fill_viridis_d(option="magma")
+SN_tile_2 <- SN_tile_2 + theme(axis.text.x = element_text(angle =45,vjust=1, hjust = 1, size=6))
+SN_tile_2 <- SN_tile_2 + theme(axis.text.y = element_text(size=6))
+SN_tile_2 <- SN_tile_2 + theme(legend.text  = element_text(size=6))
+SN_tile_2 <- SN_tile_2 + theme(legend.title = element_text(size=6))
+SN_tile_2 <- SN_tile_2 + theme(panel.background = element_rect(fill = "#FCFDBFFF",colour = "#FCFDBFFF"))
+#SN_tile <- SN_tile + theme(legend.position='none')
+SN_tile_2 <- SN_tile_2 +  ggtitle("Substantia Nigra cell type associations - no amlyloid sample")+ theme(plot.title = element_text(hjust = 0.5,size=7,face="bold"))
+#SN_tile <- SN_tile + geom_raster()
+SN_tile_2 <-  SN_tile_2 + facet_grid(. ~ Category, scales = "free", space = "free", shrink = F) 
+SN_tile_2 <- SN_tile_2 + theme(strip.background = element_blank(), strip.text.x = element_text(size=5, face = "bold"))
+SN_tile_2 <- SN_tile_2 + xlab("") + ylab("")
+SN_tile_2 <- SN_tile_2 + theme(plot.margin = unit(c(0, 0, 0, 0), "cm"))
+SN_tile_2
+```
+
+# Spearman correlation , SN original Atlas vs SN amy
+```{r}
+
+setnames(merged_results_SN_DaN_amy, c("p","p_magma"), c("p_ldsc_amy","p_magma_amy"))
+merged_results_SN_DaN_amy <- merged_results_SN_DaN_amy[,-c(5,7)]
+SN_merged <- SN_merged[,1:7]
+SN_merged <- SN_merged[,-c(5,7)]
+
+SN_org_amy <- merge(SN_merged, merged_results_SN_DaN_amy,by.all= c("Trait","Cell"), all.X=T,all.y=T)
+
+SN_org_amy$logp <- -log(SN_org_amy$p,10)
+SN_org_amy$logp_amy <- -log(SN_org_amy$p_ldsc_amy,10)
+
+res4 <-cor.test(SN_org_amy$logp, SN_org_amy$logp_amy,  method = "spearman")
+res4
+
+
+
+```
+# Format SN_org_amy data for graph
+```{r,fig.height=3,fig.width=7.1,echo=FALSE}
+SN_org_amy$Trait <- as.factor(SN_org_amy$Trait)
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Alzheimer's disease  (Jansenetal)"] <- "AD"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Amyotrophic Lateral Sclerosis"] <- "ALS"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Autism disorder"] <- "ASD"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Bipolar"] <- "BP"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Coronary Artery Disease"] <- "CAD"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Crohn Disease"] <- "CD"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Depressive Symptoms"] <- "Dep_Sym"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Educations Years"] <- "Edu_Yrs"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Epilepsy (All forms)"] <- "Epi_All"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Epilepsy (Focal)"] <- "Epi_Foc"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Epilepsy (General)"] <- "Epi_Gen"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Fasting Glucose"] <- "FG"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Height (2014)"] <- "Height"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Intelligence"] <- "Int"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Insomnia"] <- "Ins"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Lipid HDL"] <- "LHDL"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Lipid LDL"] <- "LLDL"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Lipid TC"] <- "LTC"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Lipid TG"] <- "LTG"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Major Depression"] <- "MDD"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Neuroticism"] <- "Neu"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Parkinson disease"] <- "PD"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Rheumatoid Arthritis"] <- "RA"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Schizophrenia (2018)"] <- "SCZ"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Tourette Syndrome"] <- "TS"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Type 2 diabetes (Gaulton)"] <- "T2D"
+levels(SN_org_amy$Trait)[levels(SN_org_amy$Trait)=="Ulcerative colitis"] <- "UC"
+
+
+```
+
+```{r,height=4,fig.width=7.1,echo=FALSE}
+
+SN_1 <- ggplot(SN_org_amy, aes(x=logp, y= logp_amy, label=Trait)) + geom_point(size=1)+
+  geom_smooth(method=lm, se=FALSE,color="black", lwd=0.5)
+
+
+#+geom_quasirandom(alpha = 0.5, width = 0.2)
+#vln_sn <- vln_sn + geom_dotplot(binaxis='y', stackdir='center', dotsize=0.2)
+#vln_sn <- vln_sn + coord_flip()
+SN_1 <- SN_1 + geom_text_repel(point.padding =0.1, size=2,segment.color = 'transparent')
+SN_1 <- SN_1 + theme(axis.text.y = element_text( size = 5, angle = 0, hjust = 1, vjust = 0, face = "plain"))
+SN_1 <- SN_1 + theme(axis.text.x =  element_text( size = 6))
+SN_1 <- SN_1 + theme(axis.title.y  = element_text(size=6,face="bold"))
+SN_1 <- SN_1 + theme(axis.title.x = element_text(size=6,face="bold"))
+SN_1 <- SN_1 + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+SN_1 <- SN_1 + theme(panel.background = element_rect(fill = "grey92", colour = NA))
+SN_1 <- SN_1 + theme(panel.border = element_blank())
+SN_1 <- SN_1 + theme(legend.position="none")
+SN_1 <- SN_1 + xlab("Original cell atlas (-log10(pvalue))")+ ylab("Reduced cell atlas -without Sample3 (-log10(pvalue))")
+#SN_1 <- SN_1+ theme(plot.title = element_text(size=7, face="bold", hjust = 0.5), plot.subtitle = element_text(size=7, hjust = 0.5))
+SN_1 <- SN_1 + facet_grid(~Cell,scales="fixed" ,shrink=T ,space = "free")
+SN_1 <- SN_1 + theme(strip.background = element_blank(), strip.text.x = element_text(size=8, face = "bold"))
+SN_1
+```
+
+
+
+
+# Cortex  association without the amyloid sample
+# LDSCORE Analysis: Cortex 25kb
+
+```{r get_info_results_cortex_level1_1,echo=FALSE}
+list_gwa_name<-read.table(file="info_gwa_cortex.txt",sep=",",h=T)
+atlas<-"Cortex_f0.1"
+distance<-"25"
+dir_data<-paste("/Volumes/Seagate Backup Plus Drive/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/Final_Cortex_L1_amy_Cell_Type_",distance,"k","_","ldscores",sep="")
+list_file<-list.files(path = dir_data,pattern=".cell_type_results.txt")
+val<-paste("_Cortex_L1_amy_",distance,".cell_type_results.txt",sep="")
+list_name<-gsub(val,"",list_file)
+```
+
+```{r make_table_cortex_level1_2,echo=FALSE}
+
+for (i in c(1:length(list_file))){
+  file1<-paste(dir_data,"/",list_file[i],sep="")
+  df_temp<-read.table(file1,sep="\t",h=T)
+  df_temp$GWA<-list_name[i]
+  if (i==1) {
+    df<-df_temp
+  }
+  else {
+    df<-rbind(df,df_temp)
+  }
+}
+colnames(list_gwa_name)[1]<-"GWA"
+df<-merge(list_gwa_name,df,by=c("GWA"))
+DT::datatable(df, rownames = TRUE, caption = "Cortex atlas 25kb LDscore", escape = FALSE, extensions = 'Buttons', options = list(dom = 'ftipr'))
+
+```
+
+```{r make_bar_plot_ldscore_cortex_level1_3,fig.height=8,fig.width=8, echo=FALSE}
+df_red<-df[df$Exclude==0,]
+colnames(df_red)[5]<-"Cell"
+colnames(df_red)[4]<-"Category"
+colnames(df_red)[2]<-"Trait"
+colnames(df_red)[8]<-"p"
+list_cell<-unique(as.character(df_red$Cell))
+p_bon<-0.05/length(list_cell)
+
+
+df_red$Trait<- factor(df_red$Trait, levels=unique(df_red$Trait [order(df_red$Category)]))
+
+p1<-ggplot(df_red, aes(x =Trait , y = -log(p ,10),fill=Cell)) +geom_bar(stat='identity',position=position_dodge(),width = 0.8) +
+theme(text = element_text(size=10),axis.text.x = element_text(angle = 90, hjust = 1))+
+ylab("-log10(pvalue)") + xlab("") + ggtitle("Cortex Atlas LDScore")+ theme(plot.title = element_text(hjust = 0.5,size=12,face="bold"))+
+  
+coord_flip()+geom_hline(yintercept = -log(p_bon,10),linetype="dashed")+
+facet_grid(Category ~ ., scales = "free", space = "free")+scale_fill_manual("Cell", values = c("Microglia" = "#00BE67", "Pyramidal_Neurons" = "#C77CFF", "Interneurons" = "#FF61CC","Astrocyte"="#CD9600","ODC"="#00BFC4","OPC"="#00A9FF"))
+
+
+#tiff(filename = "/Users/dpag0499/Documents/PROJECTS/Tissue_specificity/src/figure_paper/fig1_sn.tiff", width = 3000, height = 2000,res = 300)
+p1
+#dev.off()
+#system("tiffcp -c lzw fig1_sn.tiff fig1_sn_v1.tiff")
+#system("mv fig1_sn_v1.tiff fig1_sn.tiff")
+```
+
+# MAGMA Analysis: Cortex 25kb
+
+```{r get_info_results_cortex_level1_4,echo=FALSE}
+list_gwa_name_magma <-read.table(file="info_gwa_cortex_magma.txt",sep=",",h=T)
+#atlas<-"Midbrain_New"
+distance<-"25"
+dir_data<-paste("/Volumes/Seagate Backup Plus Drive/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/Final_",distance,"Kb","_Cortex_amy_f0.1",sep="")
+list_file<-list.files(path = dir_data,pattern=".25UP.25DOWN.level1.Cortex_10x_amy_f0.1_final.gsa.out")
+val<-paste(".25UP.25DOWN.level1.Cortex_10x_amy_f0.1_final.gsa.out",sep="")
+list_name<-gsub(val,"",list_file)
+```
+
+```{r make_table_cortex_level1_5,echo=FALSE}
+
+for (i in c(1:length(list_file))){
+  file1<-paste(dir_data,"/",list_file[i],sep="")
+  df_temp<-read.table(file1,sep="",h=T)
+  df_temp$GWA<-list_name[i]
+  if (i==1) {
+    df<-df_temp
+  }
+  else {
+    df<-rbind(df,df_temp)
+  }
+}
+colnames(list_gwa_name_magma)[1]<-"GWA"
+df_magma<-merge(list_gwa_name_magma,df,by=c("GWA"))
+DT::datatable(df_magma, rownames = TRUE, caption = "Cortex Atlas 25KB MAGMA", escape = FALSE, extensions = 'Buttons', options = list(dom = 'ftipr'))
+
+```
+
+```{r make_bar_plot_magma_cortex_level1_6,echo=FALSE, fig.width=8, fig.height=8}
+df_red_magma <-df_magma[df_magma$Exclude==0,]
+colnames(df_red_magma)[5]<-"Cell"
+colnames(df_red_magma)[4]<-"Category"
+colnames(df_red_magma)[2]<-"Trait"
+colnames(df_red_magma)[11]<-"p_magma"
+list_cell<-unique(as.character(df_red_magma$Cell))
+p_bon<-0.05/length(list_cell)
+
+
+df_red_magma$Trait<- factor(df_red_magma$Trait, levels=unique(df_red_magma$Trait [order(df_red_magma$Category)]))
+
+#tiff(filename ="F:/Oxford_postdoc/Cell_type_risk_skene/Figure_SN_new/fig1_SN_25kb_new.tiff", width = 3000, height = 2000,res = 300)
+p2 <-ggplot(df_red_magma, aes(x =Trait , y = -log(p_magma ,10),fill=Cell)) +geom_bar(stat='identity',position=position_dodge(),width = 0.8) +
+theme(text = element_text(size=10),axis.text.x = element_text(angle = 90, hjust = 1))+
+ylab("-log10(pvalue)") + xlab("") + ggtitle("Cortex Atlas MAGMA ")+ theme(plot.title = element_text(hjust = 0.5,size=12,face="bold"))+
+coord_flip()+geom_hline(yintercept = -log(p_bon,10),linetype="dashed")+
+facet_grid(Category ~ ., scales = "free", space = "free")+scale_fill_manual("Cell", values = c("Microglia" = "#00BE67", "Pyramidal_Neurons" = "#C77CFF", "Interneurons" = "#FF61CC","Astrocyte"="#CD9600","ODC"="#00BFC4","OPC"="#00A9FF"))
+
+p2
+#dev.off()
+#system("tiffcp -c lzw fig1_cortex.tiff fig1_cortex_v1.tiff")
+#system("mv fig1_cortex_v1.tiff fig1_cortex.tiff")
+```
+
+# Combined MidBrain (25KB) # FDR correction and Bonferroni Correction for both MAGMA and LDSC
+
+```{r combined_midbrain_level1_1, echo=FALSE}
+df_red <- df_red[,c(2,4,5,8)]
+
+list_trait <- as.character(unique(df_red$Trait))
+  
+ for (i in c(1:length(list_trait))){
+  file1<- subset(df_red, df_red$Trait== list_trait[i], select=1:4)
+  df_temp<- file1
+  #df_temp$pfdr_ldsc <- p.adjust(df_temp$p,method = "fdr")
+  df_temp$pbon_ldsc <- p.adjust(df_temp$p, method = "bonferroni")
+  if (i==1) {
+    df <-df_temp
+  }
+  else {
+    df<-rbind(df,df_temp)
+  }
+}
+
+df_red_ldsc <- df
+
+```
+
+```{r}
+df_red_magma <- df_red_magma[,c(2,4,5,11)]
+
+list_trait <- as.character(unique(df_red_magma$Trait))
+  
+ for (i in c(1:length(list_trait))){
+  file1<- subset(df_red_magma, df_red_magma$Trait== list_trait[i], select=1:4)
+  df_temp<- file1
+  #df_temp$pfdr_magma <- p.adjust(df_temp$p_magma,method = "fdr")
+  df_temp$pbon_magma <- p.adjust(df_temp$p_magma, method = "bonferroni")
+  if (i==1) {
+    df <-df_temp
+  }
+  else {
+    df<-rbind(df,df_temp)
+  }
+}
+
+df_red_magma <- df 
+```
+
+# Condition for FDR and nominal
+```{r}
+merged_results_Cortex_amy <- merge(df_red_ldsc,df_red_magma, by.all= c("Trait","Cell"),all.x=T,all.y=T)
+#merged_results_Cortex <- merged_results_Cortex %>%
+   #mutate_at(vars(p_magma, pbon_magma, pfdr_magma), ~replace_na(., -1))
+#p_bon<-0.05/length(list_cell)
+ #p_bon_log <- -log(p_bon,10)
+```
+
+
+```{r combined_midbrain_level1_1, echo=FALSE}
+merged_results_Cortex_amy$Methods <- ifelse(merged_results_Cortex_amy$pbon_ldsc <= 0.05 & merged_results_Cortex_amy$pbon_magma <= 0.05,"Both**",
+                        ifelse(merged_results_Cortex_amy$pbon_ldsc <= 0.05 & merged_results_Cortex_amy$p_magma > 0.05 ,"LDSC**",
+                         ifelse(merged_results_Cortex_amy$pbon_ldsc <= 0.05 & merged_results_Cortex_amy$p_magma <= 0.05, "LDSC** & MAGMA*",
+                        ifelse(merged_results_Cortex_amy$pbon_magma <= 0.05 & merged_results_Cortex_amy$p > 0.05, "MAGMA**",
+                        ifelse(merged_results_Cortex_amy$pbon_magma <= 0.05 & merged_results_Cortex_amy$p <= 0.05 , "MAGMA** & LDSC*","NONE")))))           
+                               
+merged_results_Cortex_amy$Region <- "Cortex"           
+                               
+
+levels(merged_results_Cortex_amy$Cell)[levels(merged_results_Cortex_amy$Cell)=="Pyramidal_Neurons"] <- "Ex neurons"
+levels(merged_results_Cortex_amy$Cell)[levels(merged_results_Cortex_amy$Cell)=="Interneurons"] <- "In neurons"
+write.table(merged_results_Cortex_amy, file="Celltype_risk_Cortex_25kb_amy.txt", sep="\t", quote=F)
+```
+
+
+
+
+
+
+# Bonferroni and nominal
+```{r combined_cortex_level1_2, fig.height=3, fig.width=7.1, echo=FALSE}
+merged_results_Cortex_1 <- merged_results_Cortex_amy
+merged_results_Cortex_1$Methods <- gsub("NONE","", merged_results_Cortex_1$Methods)
+
+Cortex_tile_2 <- ggplot(merged_results_Cortex_1, aes(Trait,Cell,fill=Methods))
+Cortex_tile_2 <- Cortex_tile_2 + geom_tile()
+#Cortex_tile_1 <- Cortex_tile_1 + scale_fill_viridis_d(option = "magma")
+Cortex_tile_2 <- Cortex_tile_2 + scale_fill_manual(breaks= c("Both**","LDSC** & MAGMA*","LDSC**","MAGMA** & LDSC*","MAGMA**"), values=c("Both**"="#20B2AA","LDSC** & MAGMA*"="#3B0F70FF","LDSC**"="#8C2981FF", "MAGMA**"="#FE9F6DFF","MAGMA** & LDSC*"="#DE4968FF" ,"#FCFDBFFF"))
+Cortex_tile_2 <- Cortex_tile_2 + theme(axis.text.x = element_text(angle =45,vjust=1, hjust = 1, size=6))
+Cortex_tile_2 <- Cortex_tile_2 + theme(axis.text.y = element_text(size=6))
+Cortex_tile_2 <- Cortex_tile_2 + theme(legend.text  = element_text(size=6))
+Cortex_tile_2 <- Cortex_tile_2 + theme(legend.title = element_text(size=6))
+#Cortex_tile <- Cortex_tile + theme(axis.text.y = element_text(size=11))
+#Cortex_tile <- Cortex_tile + theme(legend.position='none')
+Cortex_tile_2 <- Cortex_tile_2 +  ggtitle("Cortex cell type associations-no amyloid sample")+ theme(plot.title = element_text(hjust = 0.5,size=7,face="bold"))
+Cortex_tile_2 <-  Cortex_tile_2 + facet_grid(. ~ Category, scales = "free", space = "free", shrink = F) 
+Cortex_tile_2 <- Cortex_tile_2 + theme(strip.background = element_blank(), strip.text.x = element_text(size=5, face = "bold"))
+#p3 <- p3 + geom_raster()
+Cortex_tile_2 <- Cortex_tile_2 + xlab("") + ylab("")
+Cortex_tile_2
+```
+
+
+
+
+# Spearman correlation , SN original Atlas vs SN amy
+```{r}
+
+setnames(merged_results_Cortex_amy, c("p","p_magma"), c("p_ldsc_amy","p_magma_amy"))
+merged_results_Cortex_amy <- merged_results_Cortex_amy[,-c(5,7)]
+cortex_merged <- cortex_merged[,1:7]
+cortex_merged <- cortex_merged[,-c(5,7)]
+
+cortex_org_amy <- merge(cortex_merged, merged_results_Cortex_amy,by.all= c("Trait","Cell"), all.X=T,all.y=T)
+
+cortex_org_amy$logp <- -log(cortex_org_amy$p,10)
+cortex_org_amy$logp_amy <- -log(cortex_org_amy$p_ldsc_amy,10)
+
+res5 <-cor.test(cortex_org_amy$logp, cortex_org_amy$logp_amy,  method = "spearman")
+res5
+
+
+
+```
+# Format SN_org_amy data for graph
+```{r,fig.height=3,fig.width=7.1,echo=FALSE}
+cortex_org_amy$Trait <- as.factor(cortex_org_amy$Trait)
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Alzheimer's disease  (Jansenetal)"] <- "AD"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Amyotrophic Lateral Sclerosis"] <- "ALS"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Autism disorder"] <- "ASD"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Bipolar"] <- "BP"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Coronary Artery Disease"] <- "CAD"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Crohn Disease"] <- "CD"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Depressive Symptoms"] <- "Dep_Sym"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Educations Years"] <- "Edu_Yrs"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Epilepsy (All forms)"] <- "Epi_All"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Epilepsy (Focal)"] <- "Epi_Foc"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Epilepsy (General)"] <- "Epi_Gen"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Fasting Glucose"] <- "FG"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Height (2014)"] <- "Height"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Intelligence"] <- "Int"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Insomnia"] <- "Ins"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Lipid HDL"] <- "LHDL"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Lipid LDL"] <- "LLDL"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Lipid TC"] <- "LTC"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Lipid TG"] <- "LTG"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Major Depression"] <- "MDD"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Neuroticism"] <- "Neu"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Parkinson disease"] <- "PD"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Rheumatoid Arthritis"] <- "RA"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Schizophrenia (2018)"] <- "SCZ"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Tourette Syndrome"] <- "TS"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Type 2 diabetes (Gaulton)"] <- "T2D"
+levels(cortex_org_amy$Trait)[levels(cortex_org_amy$Trait)=="Ulcerative colitis"] <- "UC"
+
+
+levels(cortex_org_amy$Cell)[levels(cortex_org_amy$Cell)=="Pyramidal_Neurons"] <- "Ex neurons"
+levels(cortex_org_amy$Cell)[levels(cortex_org_amy$Cell)=="Interneurons"] <- "In neurons"
+
+```
+
+```{r,height=4,fig.width=7.1,echo=FALSE}
+
+Cor_1 <- ggplot(cortex_org_amy, aes(x=logp, y= logp_amy, label=Trait)) + geom_point(size=1)+geom_smooth(method=lm, se=FALSE,color="black", lwd=0.5)
+
+
+#+geom_quasirandom(alpha = 0.5, width = 0.2)
+#vln_sn <- vln_sn + geom_dotplot(binaxis='y', stackdir='center', dotsize=0.2)
+#vln_sn <- vln_sn + coord_flip()
+Cor_1 <- Cor_1 + geom_text_repel(point.padding =0.1, size=2,segment.color = 'transparent')
+Cor_1 <- Cor_1 + theme(axis.text.y = element_text( size = 5, angle = 0, hjust = 1, vjust = 0, face = "plain"))
+Cor_1 <- Cor_1 + theme(axis.text.x =  element_text( size = 6))
+Cor_1 <- Cor_1 + theme(axis.title.y  = element_text(size=6,face="bold"))
+Cor_1 <- Cor_1 + theme(axis.title.x = element_text(size=6,face="bold"))
+Cor_1 <- Cor_1 + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+Cor_1 <- Cor_1 + theme(panel.background = element_rect(fill = "grey92", colour = NA))
+Cor_1 <- Cor_1 + theme(panel.border = element_blank())
+Cor_1 <- Cor_1 + theme(legend.position="none")
+Cor_1 <- Cor_1 + xlab("Original cell atlas (-log10(pvalue))")+ ylab("Reduced cell atlas -without Sample3 (-log10(pvalue))")
+#SN_1 <- SN_1+ theme(plot.title = element_text(size=7, face="bold", hjust = 0.5), plot.subtitle = element_text(size=7, hjust = 0.5))
+Cor_1 <- Cor_1 + facet_grid(~Cell,scales="fixed" ,shrink=T ,space = "free")
+Cor_1 <- Cor_1 + theme(strip.background = element_blank(), strip.text.x = element_text(size=8, face = "bold"))
+Cor_1
+```
+
+
+
+
+
+# plot multipanel for cell type risk associations
+
+
+```{r, fig.height=22, fig.width=14,}
+library(gridExtra)
+library(cowplot)
+#grid.newpage()
+#tiff(filename="F:/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/New_figures/26th_April_figure2_FDRCorrection_colorscheme1.tiff",height =15.24,width =17.8,res = 300, units="cm")
+#plot_grid(SN_tile,Cortex_tile, align = "v", nrow = 2, labels = c("A","B"), label_size = 12, rel_heights = c(1,1), rel_widths = c(1.2,1.2) )
+
+
+tiff(filename="/Volumes/Seagate Backup Plus Drive/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/New_figures/Cell_type_risk_SN_Cortex_25kb_nomyloid_bonferroni_020919.tiff",height =15.24,width =17.8,res = 300, units="cm")
+plot_grid(SN_tile_2,Cortex_tile_2, align = "v", nrow = 2, labels = c("a","b"), label_size = 12, rel_heights = c(1,1), rel_widths = c(1,1) )
+
+tiff(filename="/Volumes/Seagate Backup Plus Drive/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/New_figures/Cell_type_risk_corr_LDSC_amy_org.tiff",height =20.5,width =17.8,res = 300, units="cm")
+plot_grid(SN_1,Cor_1, align = "v", nrow = 2, labels = c("a","b"), label_size = 12, rel_heights = c(1,1), rel_widths = c(1,1), axis= "tb" )
+```
+
+
+```{r}
+
+```
+
+# SN tile plot with Pvalue scale Level 1 DaN subtypes
+```{r combined_midbrain_level1_2,fig.height=5,fig.width=7.1,echo=FALSE}
+#merged_results_SN_1 <- merged_results_SN_DaN
+#merged_results_SN_1$Methods <- gsub("NONE","", merged_results_SN_1$Methods)
+library(tidyr)
+library(dplyr)
+library(data.table)
+
+SN_1_long <- gather(merged_results_SN_DaN,Method_2,Pvalue,p_ldsc:p_magma, factor_key = T)
+SN_1_long$Pvalue[SN_1_long$Pvalue > 0.05]<- NA 
+SN_1_long <- SN_1_long %>% drop_na()
+SN_1_long$Cell2 <- paste(SN_1_long$Cell,"_",SN_1_long$Method_2,sep="")
+list_cell<-unique(as.character(SN_1_long$Cell))
+p_bon<-0.05/length(list_cell)
+SN_1_long <- SN_1_long %>% mutate(Bonferroni=ifelse(Pvalue < p_bon,"*",""))
+
+par(bg="transparent")
+library(RColorBrewer)
+col.pal <- brewer.pal(6,"Reds")
+tiff(filename = "F:/Oxford_postdoc/Cell_type_risk_skene/ALL_results_ldscore_magma/New_figures/celltyerisk_L1_DaNsubtypes.tiff", width = 7.1, height =6 ,res = 300, units="in")
+SN_tile_1 <- ggplot(SN_1_long, aes(Trait,Cell2, fill= -log10(Pvalue)))
+SN_tile_1 <- SN_tile_1 + geom_tile()
+#SN_tile_1 <- SN_tile_1 + scale_fill_manual(breaks= c("Both**","LDSC** & MAGMA*","LDSC**","MAGMA** & LDSC*","MAGMA**"), values=c("Both**"="#20B2AA","LDSC** & MAGMA*"="#3B0F70FF","LDSC**"="#8C2981FF", "MAGMA**"="#FE9F6DFF","MAGMA** & LDSC*"="#DE4968FF" ,"#FCFDBFFF"))
+SN_tile_1 <- SN_tile_1 + scale_fill_gradientn(colours = col.pal)
+SN_tile_1 <- SN_tile_1 + geom_text(aes(label=Bonferroni))
+SN_tile_1 <- SN_tile_1 + theme(axis.text.x = element_text(angle =45,vjust=1, hjust = 1, size=6))
+SN_tile_1 <- SN_tile_1 + theme(axis.text.y = element_text(size=6))
+SN_tile_1 <- SN_tile_1 + theme(legend.text  = element_text(size=6))
+SN_tile_1 <- SN_tile_1 + theme(legend.title = element_text(size=6))
+SN_tile_1 <- SN_tile_1 + theme(panel.background = element_rect(fill  = "grey98",colour = "grey98"))
+#SN_tile <- SN_tile + theme(legend.position='none')
+SN_tile_1 <- SN_tile_1 +  ggtitle("Substantia Nigra cell type associations for complex traits")+ theme(plot.title = element_text(hjust = 0.5,size=7,face="bold"))
+#SN_tile <- SN_tile + geom_raster()
+SN_tile_1 <-  SN_tile_1 + facet_grid(Method ~ Category, scales = "free", space = "free", shrink = F) 
+SN_tile_1 <- SN_tile_1 + theme(strip.background = element_blank(), strip.text.x = element_text(size=5, face = "bold"))
+SN_tile_1 <- SN_tile_1 + xlab("") + ylab("")
+SN_tile_1 <- SN_tile_1 + theme(plot.margin = unit(c(0, 0, 0, 0), "cm"))
+SN_tile_1
+```
+
+# Tile plot of conditional cell type analyses results for traits in SN
+```{r cond_SN, fig.height=2.0, fig.width=7.1, echo=FALSE}
+
+SN_cond <- read.delim(file="./Conditional_analysis _figure.txt", sep="\t",header=T)
+SN_cond$Method <- gsub("NONE","", SN_cond$Method)
+SN_cond$Cell_Cond = factor(SN_cond$Cell_Cond, levels = c("Original","DaN","GABA","ODC","OPC"))
+SN_tile_cond <- ggplot(SN_cond, aes(Trait,Cell,fill=Method))
+SN_tile_cond <- SN_tile_cond + geom_tile()
+#SN_tile_cond<- SN_tile_cond+ scale_fill_viridis_d(option = "magma")
+SN_tile_cond <- SN_tile_cond + scale_fill_manual(breaks= c("LDSC** or MAGMA**","LDSC*"), values=c("LDSC** or MAGMA**"="#20B2AA","LDSC*"="#990066","#FCFDBFFF"))
+SN_tile_cond <- SN_tile_cond + theme(axis.text.x = element_text(angle =45,vjust=1, hjust = 1, size=6))
+SN_tile_cond <- SN_tile_cond + theme(axis.text.y = element_text(size=6))
+SN_tile_cond <- SN_tile_cond + theme(legend.text  = element_text(size=6))
+SN_tile_cond <- SN_tile_cond + theme(legend.title = element_text(size=6)) + theme(panel.background = element_rect(fill = "#FCFDBFFF", colour = NA))
+#Cortex_tile <- Cortex_tile + theme(axis.text.y = element_text(size=11))
+#Cortex_tile <- Cortex_tile + theme(legend.position='none')
+SN_tile_cond <- SN_tile_cond +  ggtitle("SN cell type coditional analysis with LDSC")+ theme(plot.title = element_text(hjust = 0.5,size=7,face="bold"))
+SN_tile_cond <-  SN_tile_cond + facet_grid(. ~ Cell_Cond, scales = "free", space = "free", shrink = F) 
+SN_tile_cond <- SN_tile_cond + theme(strip.background = element_blank(), strip.text.x = element_text(size=6, face = "bold"))
+#p3 <- p3 + geom_raster()
+SN_tile_cond <- SN_tile_cond + xlab("") + ylab("")  + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+SN_tile_cond
+```
+
+
