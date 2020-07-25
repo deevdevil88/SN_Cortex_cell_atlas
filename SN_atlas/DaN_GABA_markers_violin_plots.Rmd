@@ -1,0 +1,402 @@
+---
+title: "DaN & GABA markers violin plots"
+author: "Devika Agarwal"
+date: 'Last update: `r date()`'
+output:
+  html_document:
+    fig_height: 5
+    fig_width: 5
+    theme: cerulean
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+      toc_depth: 5
+  pdf_document:
+    toc: yes
+  word_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+#setwd("~/10x_scN_tara_human/Samples_merged/Nigra_merged_CCA")
+#setwd("F:/Oxford_postdoc/10x_scN_tara_human/Samples_merged/Nigra_merged_CCA")
+#setwd("/Volumes/Seagate Backup Plus Drive/Oxford_postdoc/10x_scN_tara_human/Samples_merged/Nigra_merged_CCA")
+library(ggplot2)
+library(reshape)
+library(data.table)
+library(dplyr)
+library(tidyr)
+rm(list = ls())
+theme_set(theme_bw())
+```
+
+# DaN and GABA marker violin plots using TPM counts for supplementary figure
+```{r}
+SN_log_data <- fread("Nigra_10x_CCA_tpm_protein_coding_genes.txt")
+SN_log_data <- as.data.frame(SN_log_data)
+markergenes <- c("TH","KCNJ6","LMX1B","NR4A2","SLC6A3","GAD1","GAD2","GABRA1","GABRB2","RYR2")
+SN_red <- SN_log_data %>% filter(V1 %in% markergenes)
+SN_red_t <- as.data.frame(t(SN_red))
+tempDF <- SN_red_t
+tempDF[] <- lapply(SN_red_t, as.character)
+colnames(SN_red_t) <- tempDF[1, ]
+SN_red_t <- SN_red_t[-1 ,]
+tempDF <- NULL
+SN_red_t[] <- lapply(SN_red_t, function(x) as.numeric(as.character(x)))
+SN_red_t <- log10((SN_red_t)+1)
+SN_red_t$cell_id <- rownames(SN_red_t)
+```
+
+```{r}
+metadata <- read.table(file="Metadata_SN_VlnP_figure.txt", sep="\t", header=T)
+SN_data <- merge(metadata,SN_red_t,by=c("cell_id"))
+cell_type <- c("DaNs","GABA")
+SN_data_red <- SN_data %>% filter(level2class_new %in% cell_type)
+```
+
+```{r}
+library(tidyverse)
+data_long <- gather(SN_data_red, Gene_markers, Expression, RYR2:TH, factor_key=TRUE)
+data_long_1 <- arrange(data_long, Gene_markers,Expression)
+data_long_1$Gene_markers <- ordered(data_long_1$Gene_markers, levels = c("TH","KCNJ6","LMX1B","NR4A2","SLC6A3","GAD1","GAD2","GABRA1","GABRB2","RYR2"))     
+
+write.table(data_long_1, file="GABA_DaN_markers.txt", sep="\t",quote=F)
+
+data_long_1 <- read.table(file="DaN_markers.txt", sep="\t", header=T)
+data_long_1$Pvalue <- as.factor(data_long_1$Pvalue)
+
+
+```
+
+```{r, fig.height=2.0,fig.width=1.5}
+# TH
+marker = "TH"
+data_long_2 <- data_long_1 %>% filter(Gene_markers %in% marker)
+vln_sn_1 <- ggplot(data_long_2, aes(x=level2class_new, y= Expression, group =level2class_new, fill=level2class_new ))
+
+vln_sn_1 <- vln_sn_1 + geom_violin(trim=T, scale="width", adjust=0.5) 
+vln_sn_1 <- vln_sn_1 + stat_summary(fun.y=mean, geom="point", size=2, color="black")
+#+geom_quasirandom(alpha = 0.5, width = 0.2)
+#vln_sn <- vln_sn + geom_dotplot(binaxis='y', stackdir='center', dotsize=0.2)
+#vln_sn <- vln_sn + coord_flip()
+vln_sn_1 <- vln_sn_1 +  scale_fill_manual("level2class_new", values = c("DaNs" = "#FF3300","GABA"="#f2bf00" )) 
+vln_sn_1 <- vln_sn_1 + theme(axis.text.y = element_text( size = 5, angle = 0, hjust = 1, vjust = 0, face = "plain"))
+vln_sn_1 <- vln_sn_1 + theme(axis.text.x =  element_text( size = 6))
+vln_sn_1 <- vln_sn_1 + theme(axis.title.y  = element_text(size=5))
+vln_sn_1 <- vln_sn_1 + theme(axis.title.x = element_blank())
+vln_sn_1 <- vln_sn_1 + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+vln_sn_1 <- vln_sn_1 + theme(panel.background = element_blank())
+vln_sn_1 <- vln_sn_1 + theme(panel.border = element_blank())
+vln_sn_1 <- vln_sn_1 + theme(legend.position="none")
+vln_sn_1 <- vln_sn_1 + labs(title = "TH", subtitle = "p.adj = 2.70e-11")
+vln_sn_1 <- vln_sn_1 + theme(plot.title = element_text(size=7, face="bold", hjust = 0.5), plot.subtitle = element_text(size=7, hjust = 0.5))
+#vln_sn <- vln_sn + facet_grid(~ Gene_markers,scales="free" ,shrink=T ,space = "free")
+#vln_sn <- vln_sn + theme(strip.background = element_blank(), strip.text.x = element_text(size=8, face = "bold"))
+vln_sn_1
+```
+
+
+```{r, fig.height=2.0,fig.width=1.5}
+marker = "LMX1B"
+data_long_2 <- data_long_1 %>% filter(Gene_markers %in% marker)
+# LMX1B
+vln_sn_2 <- ggplot(data_long_2, aes(x=level2class_new, y= Expression, group =level2class_new, fill=level2class_new ))
+
+vln_sn_2 <- vln_sn_2 + geom_violin(trim=T, scale="width", adjust=0.5) 
+vln_sn_2 <- vln_sn_2 + stat_summary(fun.y=mean, geom="point", size=2, color="black")
+#+geom_quasirandom(alpha = 0.5, width = 0.2)
+#vln_sn <- vln_sn + geom_dotplot(binaxis='y', stackdir='center', dotsize=0.2)
+#vln_sn <- vln_sn + coord_flip()
+vln_sn_2 <- vln_sn_2 +  scale_fill_manual("level2class_new", values = c("DaNs" = "#FF3300","GABA"="#f2bf00" )) 
+vln_sn_2 <- vln_sn_2 + theme(axis.text.y = element_text( size = 5, angle = 0, hjust = 1, vjust = 0, face = "plain"))
+vln_sn_2 <- vln_sn_2 + theme(axis.text.x =  element_text( size = 6))
+vln_sn_2 <- vln_sn_2 + theme(axis.title.y  = element_text(size=5))
+vln_sn_2 <- vln_sn_2 + theme(axis.title.x = element_blank())
+vln_sn_2 <- vln_sn_2 + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+vln_sn_2 <- vln_sn_2 + theme(panel.background = element_blank())
+vln_sn_2 <- vln_sn_2 + theme(panel.border = element_blank())
+vln_sn_2 <- vln_sn_2 + theme(legend.position="none")
+vln_sn_2 <- vln_sn_2 + labs(title = "LMX1B", subtitle = "p.adj = 9.78e-48")
+vln_sn_2 <- vln_sn_2 + theme(plot.title = element_text(size=7, face="bold", hjust = 0.5), plot.subtitle = element_text(size=7, hjust = 0.5))
+#vln_sn <- vln_sn + facet_grid(~ Gene_markers,scales="free" ,shrink=T ,space = "free")
+#vln_sn <- vln_sn + theme(strip.background = element_blank(), strip.text.x = element_text(size=8, face = "bold"))
+vln_sn_2
+```
+```{r, fig.height=2.0,fig.width=1.5}
+marker = "KCNJ6"
+data_long_2 <- data_long_1 %>% filter(Gene_markers %in% marker)
+# LMX1B
+vln_sn_3 <- ggplot(data_long_2, aes(x=level2class_new, y= Expression, group =level2class_new, fill=level2class_new ))
+
+vln_sn_3 <- vln_sn_3 + geom_violin(trim=T, scale="width", adjust=0.5) 
+vln_sn_3 <- vln_sn_3 + stat_summary(fun.y=mean, geom="point", size=2, color="black")
+#+geom_quasirandom(alpha = 0.5, width = 0.2)
+#vln_sn <- vln_sn + geom_dotplot(binaxis='y', stackdir='center', dotsize=0.2)
+#vln_sn <- vln_sn + coord_flip()
+vln_sn_3 <- vln_sn_3 +  scale_fill_manual("level2class_new", values = c("DaNs" = "#FF3300","GABA"="#f2bf00" )) 
+vln_sn_3 <- vln_sn_3 + theme(axis.text.y = element_text( size = 5, angle = 0, hjust = 1, vjust = 0, face = "plain"))
+vln_sn_3 <- vln_sn_3 + theme(axis.text.x =  element_text( size = 6))
+vln_sn_3 <- vln_sn_3 + theme(axis.title.y  = element_text(size=5))
+vln_sn_3 <- vln_sn_3 + theme(axis.title.x = element_blank())
+vln_sn_3 <- vln_sn_3 + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+vln_sn_3 <- vln_sn_3 + theme(panel.background = element_blank())
+vln_sn_3 <- vln_sn_3 + theme(panel.border = element_blank())
+vln_sn_3 <- vln_sn_3 + theme(legend.position="none")
+vln_sn_3 <- vln_sn_3 + labs(title = "KCNJ6", subtitle = "p.adj = 4.10e-24")
+vln_sn_3 <- vln_sn_3 + theme(plot.title = element_text(size=7, face="bold", hjust = 0.5), plot.subtitle = element_text(size=7, hjust = 0.5))
+#vln_sn <- vln_sn + facet_grid(~ Gene_markers,scales="free" ,shrink=T ,space = "free")
+#vln_sn <- vln_sn + theme(strip.background = element_blank(), strip.text.x = element_text(size=8, face = "bold"))
+vln_sn_3
+```
+
+```{r, fig.height=2.0,fig.width=1.5}
+marker = "NR4A2"
+data_long_2 <- data_long_1 %>% filter(Gene_markers %in% marker)
+# LMX1B
+vln_sn_4 <- ggplot(data_long_2, aes(x=level2class_new, y= Expression, group =level2class_new, fill=level2class_new ))
+
+vln_sn_4 <- vln_sn_4 + geom_violin(trim=T, scale="width", adjust=0.5) 
+vln_sn_4 <- vln_sn_4 + stat_summary(fun.y=mean, geom="point", size=2, color="black")
+#+geom_quasirandom(alpha = 0.5, width = 0.2)
+#vln_sn <- vln_sn + geom_dotplot(binaxis='y', stackdir='center', dotsize=0.2)
+#vln_sn <- vln_sn + coord_flip()
+vln_sn_4 <- vln_sn_4 +  scale_fill_manual("level2class_new", values = c("DaNs" = "#FF3300","GABA"="#f2bf00" )) 
+vln_sn_4 <- vln_sn_4 + theme(axis.text.y = element_text( size = 5, angle = 0, hjust = 1, vjust = 0, face = "plain"))
+vln_sn_4 <- vln_sn_4 + theme(axis.text.x =  element_text( size = 6))
+vln_sn_4 <- vln_sn_4 + theme(axis.title.y  = element_text(size=5))
+vln_sn_4 <- vln_sn_4 + theme(axis.title.x = element_blank())
+vln_sn_4 <- vln_sn_4 + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+vln_sn_4 <- vln_sn_4 + theme(panel.background = element_blank())
+vln_sn_4 <- vln_sn_4 + theme(panel.border = element_blank())
+vln_sn_4 <- vln_sn_4 + theme(legend.position="none")
+vln_sn_4 <- vln_sn_4 + labs(title = "NR4A2", subtitle = "p.adj = 2.94e-08")
+vln_sn_4 <- vln_sn_4 + theme(plot.title = element_text(size=7, face="bold", hjust = 0.5), plot.subtitle = element_text(size=7, hjust = 0.5))
+#vln_sn <- vln_sn + facet_grid(~ Gene_markers,scales="free" ,shrink=T ,space = "free")
+#vln_sn <- vln_sn + theme(strip.background = element_blank(), strip.text.x = element_text(size=8, face = "bold"))
+vln_sn_4
+```
+
+
+```{r, fig.height=2.0,fig.width=1.5}
+marker = "SLC6A3"
+data_long_2 <- data_long_1 %>% filter(Gene_markers %in% marker)
+# SLC6A3
+vln_sn_5 <- ggplot(data_long_2, aes(x=level2class_new, y= Expression, group =level2class_new, fill=level2class_new ))
+
+vln_sn_5 <- vln_sn_5 + geom_violin(trim=T, scale="width", adjust=0.5) 
+vln_sn_5 <- vln_sn_5 + stat_summary(fun.y=mean, geom="point", size=2, color="black")
+#+geom_quasirandom(alpha = 0.5, width = 0.2)
+#vln_sn <- vln_sn + geom_dotplot(binaxis='y', stackdir='center', dotsize=0.2)
+#vln_sn <- vln_sn + coord_flip()
+vln_sn_5 <- vln_sn_5 +  scale_fill_manual("level2class_new", values = c("DaNs" = "#FF3300","GABA"="#f2bf00" )) 
+vln_sn_5 <- vln_sn_5 + theme(axis.text.y = element_text( size = 5, angle = 0, hjust = 1, vjust = 0, face = "plain"))
+vln_sn_5 <- vln_sn_5 + theme(axis.text.x =  element_text( size = 6))
+vln_sn_5 <- vln_sn_5 + theme(axis.title.y  = element_text(size=5))
+vln_sn_5 <- vln_sn_5 + theme(axis.title.x = element_blank())
+vln_sn_5 <- vln_sn_5 + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+vln_sn_5 <- vln_sn_5 + theme(panel.background = element_blank())
+vln_sn_5 <- vln_sn_5 + theme(panel.border = element_blank())
+vln_sn_5 <- vln_sn_5 + theme(legend.position="none")
+vln_sn_5 <- vln_sn_5 + labs(title = "SLC6A3", subtitle = "p.adj = 1.62e-107")
+vln_sn_5 <- vln_sn_5 + theme(plot.title = element_text(size=7, face="bold", hjust = 0.5), plot.subtitle = element_text(size=7, hjust = 0.5))
+#vln_sn <- vln_sn + facet_grid(~ Gene_markers,scales="free" ,shrink=T ,space = "free")
+#vln_sn <- vln_sn + theme(strip.background = element_blank(), strip.text.x = element_text(size=8, face = "bold"))
+vln_sn_5
+```
+
+```{r, fig.width=7.0, fig.height=2.2}
+#tiff(filename = "/Volumes/Seagate Backup Plus Drive/Oxford_postdoc/10x_scN_tara_human/Samples_merged/Nigra_merged_CCA/SN_metrics_l2_v2.tiff", width = 17.8, height = 19.0,res = 300, unit="cm")
+DaNs_plot <- plot_grid(vln_sn_1,vln_sn_2, vln_sn_3, vln_sn_4,vln_sn_5, label_size = 8, labels= NULL,align = "h", ncol = 5)
+DaNs_plot
+title <- ggdraw() + 
+  draw_label(
+    "DaN markers",
+    fontface = 'bold', size=8,
+    x = 0,
+    hjust = 0.0
+  ) +
+  theme(
+    # add margin on the left of the drawing canvas,
+    # so title is aligned with left edge of first plot
+    plot.margin = margin(0, 0, 0, 7)
+  )
+DaNs_plot <- plot_grid(
+  title, DaNs_plot,
+  ncol = 1,
+  # rel_heights values control vertical title margins
+  rel_heights = c(0.1, 1)
+)
+DaNs_plot
+```
+
+```{r}
+data_long_1 <- read.table(file="GABA_markers.txt", sep="\t", header=T)
+#data_long_1$Pvalue <- as.factor(data_long_1$Pvalue)
+
+```
+
+```{r, fig.height=2.0,fig.width=1.5}
+# TH
+marker = "GAD1"
+data_long_2 <- data_long_1 %>% filter(Gene_markers %in% marker)
+vln_sn_1 <- ggplot(data_long_2, aes(x=level2class_new, y= Expression, group =level2class_new, fill=level2class_new ))
+
+vln_sn_1 <- vln_sn_1 + geom_violin(trim=T, scale="width", adjust=0.5) 
+vln_sn_1 <- vln_sn_1 + stat_summary(fun.y=mean, geom="point", size=2, color="black")
+#+geom_quasirandom(alpha = 0.5, width = 0.2)
+#vln_sn <- vln_sn + geom_dotplot(binaxis='y', stackdir='center', dotsize=0.2)
+#vln_sn <- vln_sn + coord_flip()
+vln_sn_1 <- vln_sn_1 +  scale_fill_manual("level2class_new", values = c("DaNs" = "#FF3300","GABA"="#f2bf00" )) 
+vln_sn_1 <- vln_sn_1 + theme(axis.text.y = element_text( size = 5, angle = 0, hjust = 1, vjust = 0, face = "plain"))
+vln_sn_1 <- vln_sn_1 + theme(axis.text.x =  element_text( size = 6))
+vln_sn_1 <- vln_sn_1 + theme(axis.title.y  = element_text(size=5))
+vln_sn_1 <- vln_sn_1 + theme(axis.title.x = element_blank())
+vln_sn_1 <- vln_sn_1 + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+vln_sn_1 <- vln_sn_1 + theme(panel.background = element_blank())
+vln_sn_1 <- vln_sn_1 + theme(panel.border = element_blank())
+vln_sn_1 <- vln_sn_1 + theme(legend.position="none")
+vln_sn_1 <- vln_sn_1 + labs(title = "GAD1", subtitle = "p.adj = 4.92e-02")
+vln_sn_1 <- vln_sn_1 + theme(plot.title = element_text(size=7, face="bold", hjust = 0.5), plot.subtitle = element_text(size=7, hjust = 0.5))
+#vln_sn <- vln_sn + facet_grid(~ Gene_markers,scales="free" ,shrink=T ,space = "free")
+#vln_sn <- vln_sn + theme(strip.background = element_blank(), strip.text.x = element_text(size=8, face = "bold"))
+vln_sn_1
+```
+
+```{r, fig.height=2.0,fig.width=1.5}
+marker = "GAD2"
+data_long_2 <- data_long_1 %>% filter(Gene_markers %in% marker)
+# GAD2
+vln_sn_2 <- ggplot(data_long_2, aes(x=level2class_new, y= Expression, group =level2class_new, fill=level2class_new ))
+
+vln_sn_2 <- vln_sn_2 + geom_violin(trim=T, scale="width", adjust=0.5) 
+vln_sn_2 <- vln_sn_2 + stat_summary(fun.y=mean, geom="point", size=2, color="black")
+#+geom_quasirandom(alpha = 0.5, width = 0.2)
+#vln_sn <- vln_sn + geom_dotplot(binaxis='y', stackdir='center', dotsize=0.2)
+#vln_sn <- vln_sn + coord_flip()
+vln_sn_2 <- vln_sn_2 +  scale_fill_manual("level2class_new", values = c("DaNs" = "#FF3300","GABA"="#f2bf00" )) 
+vln_sn_2 <- vln_sn_2 + theme(axis.text.y = element_text( size = 5, angle = 0, hjust = 1, vjust = 0, face = "plain"))
+vln_sn_2 <- vln_sn_2 + theme(axis.text.x =  element_text( size = 6))
+vln_sn_2 <- vln_sn_2 + theme(axis.title.y  = element_text(size=5))
+vln_sn_2 <- vln_sn_2 + theme(axis.title.x = element_blank())
+vln_sn_2 <- vln_sn_2 + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+vln_sn_2 <- vln_sn_2 + theme(panel.background = element_blank())
+vln_sn_2 <- vln_sn_2 + theme(panel.border = element_blank())
+vln_sn_2 <- vln_sn_2 + theme(legend.position="none")
+vln_sn_2 <- vln_sn_2 + labs(title = "GAD2", subtitle = "p.adj = 1.14e-03")
+vln_sn_2 <- vln_sn_2 + theme(plot.title = element_text(size=7, face="bold", hjust = 0.5), plot.subtitle = element_text(size=7, hjust = 0.5))
+#vln_sn <- vln_sn + facet_grid(~ Gene_markers,scales="free" ,shrink=T ,space = "free")
+#vln_sn <- vln_sn + theme(strip.background = element_blank(), strip.text.x = element_text(size=8, face = "bold"))
+vln_sn_2
+```
+```{r, fig.height=2.0,fig.width=1.5}
+marker = "GABRA1"
+data_long_2 <- data_long_1 %>% filter(Gene_markers %in% marker)
+# LMX1B
+vln_sn_3 <- ggplot(data_long_2, aes(x=level2class_new, y= Expression, group =level2class_new, fill=level2class_new ))
+
+vln_sn_3 <- vln_sn_3 + geom_violin(trim=T, scale="width", adjust=0.5) 
+vln_sn_3 <- vln_sn_3 + stat_summary(fun.y=mean, geom="point", size=2, color="black")
+#+geom_quasirandom(alpha = 0.5, width = 0.2)
+#vln_sn <- vln_sn + geom_dotplot(binaxis='y', stackdir='center', dotsize=0.2)
+#vln_sn <- vln_sn + coord_flip()
+vln_sn_3 <- vln_sn_3 +  scale_fill_manual("level2class_new", values = c("DaNs" = "#FF3300","GABA"="#f2bf00" )) 
+vln_sn_3 <- vln_sn_3 + theme(axis.text.y = element_text( size = 5, angle = 0, hjust = 1, vjust = 0, face = "plain"))
+vln_sn_3 <- vln_sn_3 + theme(axis.text.x =  element_text( size = 6))
+vln_sn_3 <- vln_sn_3 + theme(axis.title.y  = element_text(size=5))
+vln_sn_3 <- vln_sn_3 + theme(axis.title.x = element_blank())
+vln_sn_3 <- vln_sn_3 + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+vln_sn_3 <- vln_sn_3 + theme(panel.background = element_blank())
+vln_sn_3 <- vln_sn_3 + theme(panel.border = element_blank())
+vln_sn_3 <- vln_sn_3 + theme(legend.position="none")
+vln_sn_3 <- vln_sn_3 + labs(title = "GABRA1", subtitle = "p.adj = 1.302e-11")
+vln_sn_3 <- vln_sn_3 + theme(plot.title = element_text(size=7, face="bold", hjust = 0.5), plot.subtitle = element_text(size=7, hjust = 0.5))
+#vln_sn <- vln_sn + facet_grid(~ Gene_markers,scales="free" ,shrink=T ,space = "free")
+#vln_sn <- vln_sn + theme(strip.background = element_blank(), strip.text.x = element_text(size=8, face = "bold"))
+vln_sn_3
+```
+
+```{r, fig.height=2.0,fig.width=1.5}
+marker = "GABRB2"
+data_long_2 <- data_long_1 %>% filter(Gene_markers %in% marker)
+# LMX1B
+vln_sn_4 <- ggplot(data_long_2, aes(x=level2class_new, y= Expression, group =level2class_new, fill=level2class_new ))
+
+vln_sn_4 <- vln_sn_4 + geom_violin(trim=T, scale="width", adjust=0.5) 
+vln_sn_4 <- vln_sn_4 + stat_summary(fun.y=mean, geom="point", size=2, color="black")
+#+geom_quasirandom(alpha = 0.5, width = 0.2)
+#vln_sn <- vln_sn + geom_dotplot(binaxis='y', stackdir='center', dotsize=0.2)
+#vln_sn <- vln_sn + coord_flip()
+vln_sn_4 <- vln_sn_4 +  scale_fill_manual("level2class_new", values = c("DaNs" = "#FF3300","GABA"="#f2bf00" )) 
+vln_sn_4 <- vln_sn_4 + theme(axis.text.y = element_text( size = 5, angle = 0, hjust = 1, vjust = 0, face = "plain"))
+vln_sn_4 <- vln_sn_4 + theme(axis.text.x =  element_text( size = 6))
+vln_sn_4 <- vln_sn_4 + theme(axis.title.y  = element_text(size=5))
+vln_sn_4 <- vln_sn_4 + theme(axis.title.x = element_blank())
+vln_sn_4 <- vln_sn_4 + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+vln_sn_4 <- vln_sn_4 + theme(panel.background = element_blank())
+vln_sn_4 <- vln_sn_4 + theme(panel.border = element_blank())
+vln_sn_4 <- vln_sn_4 + theme(legend.position="none")
+vln_sn_4 <- vln_sn_4 + labs(title = "GABRB2", subtitle = "p.adj = 1.11e-06")
+vln_sn_4 <- vln_sn_4 + theme(plot.title = element_text(size=7, face="bold", hjust = 0.5), plot.subtitle = element_text(size=7, hjust = 0.5))
+#vln_sn <- vln_sn + facet_grid(~ Gene_markers,scales="free" ,shrink=T ,space = "free")
+#vln_sn <- vln_sn + theme(strip.background = element_blank(), strip.text.x = element_text(size=8, face = "bold"))
+vln_sn_4
+```
+```{r, fig.height=2.0,fig.width=1.5}
+marker = "RYR2"
+data_long_2 <- data_long_1 %>% filter(Gene_markers %in% marker)
+# SLC6A3
+vln_sn_5 <- ggplot(data_long_2, aes(x=level2class_new, y= Expression, group =level2class_new, fill=level2class_new ))
+
+vln_sn_5 <- vln_sn_5 + geom_violin(trim=T, scale="width", adjust=0.5) 
+vln_sn_5 <- vln_sn_5 + stat_summary(fun.y=mean, geom="point", size=2, color="black")
+#+geom_quasirandom(alpha = 0.5, width = 0.2)
+#vln_sn <- vln_sn + geom_dotplot(binaxis='y', stackdir='center', dotsize=0.2)
+#vln_sn <- vln_sn + coord_flip()
+vln_sn_5 <- vln_sn_5 +  scale_fill_manual("level2class_new", values = c("DaNs" = "#FF3300","GABA"="#f2bf00" )) 
+vln_sn_5 <- vln_sn_5 + theme(axis.text.y = element_text( size = 5, angle = 0, hjust = 1, vjust = 0, face = "plain"))
+vln_sn_5 <- vln_sn_5 + theme(axis.text.x =  element_text( size = 6))
+vln_sn_5 <- vln_sn_5 + theme(axis.title.y  = element_text(size=5))
+vln_sn_5 <- vln_sn_5 + theme(axis.title.x = element_blank())
+vln_sn_5 <- vln_sn_5 + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+vln_sn_5 <- vln_sn_5 + theme(panel.background = element_blank())
+vln_sn_5 <- vln_sn_5 + theme(panel.border = element_blank())
+vln_sn_5 <- vln_sn_5 + theme(legend.position="none")
+vln_sn_5 <- vln_sn_5 + labs(title = "RYR2", subtitle = "p.adj = 2.36e-15")
+vln_sn_5 <- vln_sn_5 + theme(plot.title = element_text(size=7, face="bold", hjust = 0.5), plot.subtitle = element_text(size=7, hjust = 0.5))
+#vln_sn <- vln_sn + facet_grid(~ Gene_markers,scales="free" ,shrink=T ,space = "free")
+#vln_sn <- vln_sn + theme(strip.background = element_blank(), strip.text.x = element_text(size=8, face = "bold"))
+vln_sn_5
+```
+
+```{r, fig.width=7.0, fig.height=2.2}
+#tiff(filename = "/Volumes/Seagate Backup Plus Drive/Oxford_postdoc/10x_scN_tara_human/Samples_merged/Nigra_merged_CCA/SN_metrics_l2_v2.tiff", width = 17.8, height = 19.0,res = 300, unit="cm")
+GABA_plot <- plot_grid(vln_sn_1,vln_sn_2, vln_sn_3, vln_sn_4,vln_sn_5, label_size = 8, labels= NULL,align = "h", ncol = 5)
+GABA_plot
+title <- ggdraw() + 
+  draw_label(
+    "GABA markers",
+    fontface = 'bold', size = 8,
+    x = 0,
+    hjust = 0.0
+  ) +
+  theme(
+    # add margin on the left of the drawing canvas,
+    # so title is aligned with left edge of first plot
+    plot.margin = margin(0, 0, 0, 7)
+  )
+
+GABA_plot <- plot_grid(
+  title, GABA_plot,
+  ncol = 1,
+  # rel_heights values control vertical title margins
+  rel_heights = c(0.1, 1)
+)
+GABA_plot
+
+```
+# multiplanel supp figure 3
+```{r, fig.height=4.4, fig.width= 7.0}
+tiff(filename = "/Volumes/Seagate Backup Plus Drive/Oxford_postdoc/10x_scN_tara_human/Samples_merged/Nigra_merged_CCA/SN_neuron_markers.tiff", width = 17.8, height = 11.20,res = 300, unit="cm")
+plot_grid (DaNs_plot,GABA_plot, nrow = 2, align = "v", axis = "tb", labels = NULL, label_size = 10)
+```
