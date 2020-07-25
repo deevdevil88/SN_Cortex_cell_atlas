@@ -1,0 +1,2828 @@
+---
+title: "Sc_Nuclei_human Substania Nigra samples"
+author: "Devika"
+date: "15th June 2018"
+output: 
+html_document:
+  code_folding: hide
+    number_sections: yes
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE , cache.lazy = FALSE, tidy = TRUE)
+library(scater)
+library(Matrix)
+library(DropletUtils)
+library(data.table)
+library(Seurat)
+library(dplyr)
+```
+
+#  Exploratory Aanalysis of data and QC with scater 
+
+```{r init, message=TRUE}
+
+# load 
+dir.name <- "~/Documents/10x_scN_tara_human/Samples_merged/Sample_8N5_16N5B/filtered_gene_bc_matrices_mex/GRCh38-premrna"
+sce_sample_Nigra <- read10xCounts(dir.name, col.names = T)
+
+#br.out <- barcodeRanks(counts(sce_sample_Nigra))
+
+# Making a plot.
+#plot(br.out$rank, br.out$total, log="xy", xlab="Rank", ylab="Total")
+#o <- order(br.out$rank)
+#lines(br.out$rank[o], br.out$fitted[o], col="red")
+#abline(h=br.out$knee, col="dodgerblue", lty=2)
+#abline(h=br.out$inflection, col="forestgreen", lty=2)
+#legend("bottomleft", lty=2, col=c("dodgerblue", "forestgreen"), 
+#legend=c("knee", "inflection"))
+
+
+
+#set.seed(100)
+#e.out <- emptyDrops(counts(sce_sample_N4_N4B))
+#e.out
+
+#is.cell <- e.out$FDR <= 0.01
+#sum(is.cell, na.rm=TRUE)
+
+samples <- read.csv(file.path("~/Documents/10x_scN_tara_human/Samples_merged/Sample_8N5_16N5B", "aggregation_csv.csv"), stringsAsFactors=F)
+
+#cellcodes <- as.data.frame(sample_N4_N4B@raw.data@Dimnames[[2]])
+#colnames(cellcodes) <- "barcodes"
+#rownames(cellcodes) <- cellcodes$barcodes
+#cellcodes$libcodes <- as.factor(gsub(pattern=".+-", replacement="", cellcodes$barcodes))
+#cellcodes$samples <- as.vector(samples$library_id[cellcodes$libcodes])
+#sampleidentity <- cellcodes["samples"]
+
+colData(sce_sample_Nigra) <- cbind(colData(sce_sample_Nigra), sampleidentity)
+#colData(sce_sample_Nigra) <- cbind(colData(sce_sample_Nigra), batches)
+rownames(sce_sample_Nigra)<- rowData(sce_sample_Nigra)$Symbol
+
+old_rowdata <- as.data.table(rowData(sce_sample_Nigra))
+old_rowdata$gene <- paste(old_rowdata$ID, "-", old_rowdata$Symbol)
+setnames(old_rowdata, c("ID", "gene"), c("gene", "ID"))
+old_rowdata <- as.data.frame(old_rowdata)
+rownames(old_rowdata) <- old_rowdata$ID
+rowData(sce_sample_Nigra) <- old_rowdata
+
+
+```
+
+# find mito and ribo genes , calculate QC metrics
+```{r scater_QC, message=TRUE}
+rownames(sce_sample_Nigra)<- rowData(sce_sample_Nigra)$Symbol
+# Find mitochondrial genes in our
+# merged N4_N4B dataset
+is.mito_Nigra <- grepl("^MT-", rownames(sce_sample_Nigra))
+
+# Find ribosomal genes  grep(pattern = "^MT-", x = rownames(x = sample_N4_N4B@data), value = TRUE)
+is.ribosomal_Nigra <- grepl("^RPS|^RPL",
+                            rownames(sce_sample_Nigra))
+
+rownames(sce_sample_Nigra) <- rowData(sce_sample_Nigra)$ID
+
+
+# Calculate QC matrix for each cell,
+# stored in pData os the SCEset
+#sce_sample_N4_N4B <- calculateQCMetrics(sce_sample_N4_N4B,
+                                #feature_controls = list(Rb = is.ribosomal_N4_NB,
+                                                        #Mt = is.mito_N4_NB))
+
+
+
+sce_sample_Nigra <- calculateQCMetrics(sce_sample_Nigra,
+                                feature_controls = list(Rb = is.ribosomal_Nigra,
+                                                        Mt = is.mito_Nigra))
+
+#t_fdata <- rowData(sce_sample_N4_N4B)
+#sum(t_fdata$n_cells_by_counts == 0)
+drop_tx <- apply(counts(sce_sample_Nigra), 1, function(x) {var(x) == 0})
+sce_sample_Nigra <- sce_sample_Nigra[!drop_tx, ]
+cat("Genes removed with zero variance: ", sum(drop_tx), fill=T)
+cat("Genes with minimal expression in at least one cell: ", dim(sce_sample_Nigra)[1], fill=T)
+
+# Plots total genes and library sizes
+#png("PlotQC_Mito_Ribo.png", w = 2000,h = 2000, res = 400)
+#par(mfrow = c(2, 2), cex = 1.2)
+par(mfrow=c(2,2), mar=c(6.1, 5.1, 0.1, 0.1))
+
+hist(sce_sample_Nigra$total_counts/1e+03, xlab = "Library sizes (thousands)",
+     main = "", breaks = 20, col = "grey80",
+     ylab = "Number of cells")
+hist(sce_sample_Nigra$total_features, xlab = "Number of expressed genes",
+     main = "", breaks = 20, col = "grey80",
+     ylab = "Number of cells")
+
+# plots reads mapped to Mt genes
+hist(sce_sample_Nigra$pct_counts_Mt,
+     xlab = "Mitochondrial proportion (%)",
+     ylab = "Number of cells", breaks = 20,
+     main = "", col = "grey80")
+
+# plots reads mapped to Rb genes
+hist(sce_sample_Nigra$pct_counts_Rb,
+     xlab = "Ribosomal proportion (%)",
+     ylab = "Number of cells", breaks = 20,
+     main = "", col = "grey80")
+#dev.off()
+#png("AverageCount.png", w = 2000, h = 2000,
+    #res = 400)
+
+
+# examine expression of log-means
+ #across all genes
+ave.counts <- rowMeans(counts(sce_sample_Nigra))
+hist(log10(ave.counts), breaks = 100,
+     main = "", col = "grey80", xlab = expression(Log[10] ~
+                                                    "average count"))
+
+rowData(sce_sample_Nigra)$ave.count <- ave.counts
+to.keep <- ave.counts > 0
+#sce_sample_Nigra <- sce_sample_Nigra[to.keep,]
+summary(to.keep)
+
+
+```
+
+```{r , scater_gene_level_metrics, fig.height=10}
+# Plot number of top genes
+fontsize <- theme(axis.text = element_text(size = 8),
+                  axis.title = element_text(size = 12))
+#png("TopGenes_gotMapped.png", w = 2000,
+    #h = 2000, res = 400)
+plotQC(sce_sample_Nigra, type = "highest-expression",
+       n = 50, feature_names_to_plot= "ID") + fontsize
+#dev.off()
+
+```
+
+# look at cell level data and identifying outlies using QC metrics
+
+```{r , scater_cell_level_metrics}
+# Plot number of cells
+numcells <- nexprs(sce_sample_Nigra, byrow = TRUE)
+#png("AverageCount_SmoothScatter.png",
+   # w = 2000, h = 2000, res = 400)
+smoothScatter(log10(ave.counts), numcells,
+              xlab = expression(Log[10] ~ "average count"),
+              ylab = "Number of expressing cells")
+#dev.off()
+
+# PCA plot to check for potential cell
+# outliers according to PC1 and PC2
+# (based on general cell data)
+#png("PCA_cellOutliers.png", w = 2000,
+    #h = 2000, res = 400)
+sce_sample_Nigra <- runPCA(sce_sample_Nigra, use_coldata = TRUE,
+    detect_outliers = TRUE)
+
+plotReducedDim(sce_sample_Nigra, use_dimred="PCA_coldata", colour_by = "samples")
+#plotReducedDim(sce_sample_Nigra, use_dimred="PCA_coldata", colour_by = "batches")
+#dev.off()
+summary(sce_sample_Nigra$outlier)
+
+plotQC(sce_sample_Nigra, type = "exprs-freq-vs-mean")
+
+```
+
+
+
+```{r , scater_pct_counts_featurecontrols}
+plotColData(sce_sample_Nigra, x = "total_features_by_counts",
+    y = "pct_counts_feature_control", colour_by =  "samples") +
+    theme(legend.position = "top") +
+    stat_smooth(method = "lm", se = FALSE, size = 2, fullrange = TRUE)
+
+```
+
+
+
+# removing outlier cells based on MT &RB proportion and library size
+#Removal of low-quality cells is then performed by combining the filters for all of the metrics. The majority of cells are retained, which suggests that the original quality control procedures were generally adequate.
+
+```{r}
+# remove cells with low expression or
+# low number of genes (lower than 3
+# median absolute deviation of
+# log(library size))
+libsize.drop_sample <- isOutlier(sce_sample_Nigra$total_counts,
+                                nmads = 3, type = "lower", log = TRUE)
+feature.drop_sample <- isOutlier(sce_sample_Nigra$total_features,
+                                nmads = 3, type = "lower", log = TRUE)
+
+# remove cells with high percent of
+# reads mapped to Mt genes (possibly
+# dead cells) (higher than 3 median
+# absolute deviation)
+#not high enough to work
+mito.drop_sample <- isOutlier(sce_sample_Nigra$pct_counts_feature_controls_Mt,
+                             nmads = 3, type = "higher")
+ribo.drop_sample <- isOutlier(sce_sample_Nigra$pct_counts_feature_controls_Rb,
+                             nmads = 3, type = "higher")
+sce_sample_Nigra<- sce_sample_Nigra[, !(libsize.drop_sample |
+                             feature.drop_sample )]
+
+data.frame(ByLibSize=sum(libsize.drop_sample),ByFeature=sum(feature.drop_sample), 
+     Remaining=ncol(sce_sample_Nigra))
+
+
+
+```
+# further cleaning of data based on mitochondrial and RB percent of genes
+```{r}
+# Remove cells by Mt gene further
+mito.drop0.05 <- sce_sample_Nigra$pct_counts_Mt <=
+  5
+mito.remove0.05 <- sce_sample_Nigra$pct_counts_Mt >
+  5
+sce_sample_Nigra <- sce_sample_Nigra[, mito.drop0.05]
+
+# Remove cells by Rb gene further
+ribo.drop0.05 <- sce_sample_Nigra$pct_counts_Rb <=
+  5
+ribo.remove0.05 <- sce_sample_Nigra$pct_counts_Rb >
+  5
+sce_sample_Nigra <- sce_sample_Nigra[, ribo.drop0.05]
+
+# check number of cells that genes
+# express
+#png("Cells_expresing_genes.png", w = 2000,
+    #h = 2000, res = 400)
+numcells <- nexprs(sce_sample_Nigra, byrow = TRUE)
+hist(log2(numcells), xlab = "Log2 number of cells expressing the gene",
+     ylab = "Number of genes", main = "Number of cells a gene was detected")
+#dev.off()
+
+# remove genes expressed in fewer than
+# 1% of total cells
+numcells <- nexprs(sce_sample_Nigra, byrow = TRUE)
+genes.keep <- numcells >= 12
+genes.remove <- numcells < 12
+sce_sample_Nigra <- sce_sample_Nigra[genes.keep,]
+                               
+
+# Plot number genes after data
+# filtering
+#png("TopGenes_gotMapped_PostDataCleaning.png")
+#plotQC(sce_sample_N4_N4B_Ftgenes, type = "highest-expression",
+      # n = 30) + fontsize
+#dev.off()
+
+plotQC(sce_sample_Nigra, type = "exprs-freq-vs-mean")
+
+
+
+```
+# cells removed numbers
+```{r}
+ #check how many cells are removed
+datRemove <- data.frame(ByLibSize = sum(libsize.drop_sample),
+                        ByFeature = sum(feature.drop_sample),
+                        GeneRemovedByCell = sum(genes.remove),
+                        ByMito0.05 = sum(mito.remove0.05),
+                        ByRibo0.05 = sum(ribo.remove0.05),
+                        CellRemaining = ncol(sce_sample_Nigra),
+                        GeneRemaining = sum(genes.keep))
+# feature filtering based 
+keep_feature <- nexprs(sce_sample_Nigra, byrow=TRUE) >= 3
+sce_sample_Nigra <- sce_sample_Nigra[keep_feature,]
+dim(sce_sample_Nigra)
+
+```
+
+
+```{r , scater_cumulative_expression}
+metadata <- as.data.frame(colData(sce_sample_Nigra))
+plotScater(sce_sample_Nigra,
+     colour_by = "samples", nfeatures = 500, exprs_values = "counts")
+
+#plotScater(sce_sample_Nigra,
+     #colour_by = "batches", nfeatures = 300, exprs_values = "counts")
+
+```
+
+
+
+```{r , cell_cycle_scoring_scran}
+library(scran)
+hs.pairs <- readRDS(system.file("exdata", "human_cycle_markers.rds", package="scran"))
+# This requires the use of the Ensembl identifiers to match up with the pre-defined classifier.
+rownames(sce_sample_Nigra) <- (rowData(sce_sample_Nigra)$gene)
+assignments <- cyclone(sce_sample_Nigra, hs.pairs, gene.names=rowData(sce_sample_Nigra)$gene)
+table(assignments$phase)
+cell_cycle_phase <- as.data.frame(assignments$phases)
+rownames(cell_cycle_phase) <- metadata$Barcode
+metadata$Cell_Cycle <- cell_cycle_phase$`assignments$phases`
+colData(sce_sample_Nigra) <- cbind(colData(sce_sample_Nigra), cell_cycle_phase)
+#plotScater(sce_sample_Nigra,  block2="batches",
+    # colour_by = "assignments$phases", nfeatures = 300, exprs_values = "counts")
+
+plotScater(sce_sample_Nigra,  block2="samples",
+     colour_by = "assignments$phases", nfeatures = 300, exprs_values = "counts")
+
+
+```
+# based on the explanantory graph from scater, will have to account for the different samples and total features
+
+```{r experimental_factors_expression, fig.height=10}
+
+#sizeFactors(example_sce) <- librarySizeFactors(example_sce)
+#summary(sizeFactors(example_sce))
+#example_sce <- normalize(example_sce)
+clusters <- quickCluster(sce_sample_Nigra, min.mean=0.1, method="igraph")
+sce_sample_Nigra <- computeSumFactors(sce_sample_Nigra, cluster=clusters, min.mean=0.1)
+summary(sizeFactors(sce_sample_Nigra))
+plot(sizeFactors(sce_sample_Nigra), sce_sample_Nigra$total_counts/1e3, log="xy",
+    ylab="Library size (thousands)", xlab="Size factor")
+
+sce_sample_Nigra<- normalize(sce_sample_Nigra)
+
+plotQC(sce_sample_Nigra, type = "expl",
+    variables = c("total_features_by_counts", "total_counts",
+        "total_counts_Rb", "samples", "assignments$phases","total_counts_Mt","pct_counts_Mt","pct_counts_Rb" ,"pct_counts_feature_control", "total_features"),theme_size=12)
+
+plotQC(sce_sample_Nigra, type = "expl", method = "pairs", theme_size = 8,variables = c("total_features_by_counts", "total_counts",
+        "total_counts_Rb", "samples", "assignments$phases","total_counts_Mt","pct_counts_Mt","pct_counts_Rb" ,"pct_counts_feature_control","total_features"))
+```
+
+
+# important PCS for various variables for top 3000 most variable genes. As Seurat found about 3000 variable genes
+# Based on these results numi,samples,percent.mito,percent.ribo, batches need to be regressed out in Seurat
+```{r plots_PC_QC, fig.width=9}
+
+sce_sample_Nigra <- runPCA(sce_sample_Nigra, ncomponents=50, ntop=2000)
+
+plotPCA(sce_sample_Nigra, ncomponents = 2, colour_by = "samples", shape_by = "assignments$phases")
+
+#plotPCA(sce_sample_Nigra, ncomponents = 2, colour_by = "batches", shape_by = "assignments$phases", ntop=3000)
+
+plotQC(sce_sample_Nigra, type = "find-pcs", variable = "total_features_by_counts", ntop= 2000)
+
+plotQC(sce_sample_Nigra, type = "find-pcs", variable = "total_counts", ntop= 2000)
+
+plotQC(sce_sample_Nigra, type = "find-pcs", variable = "total_counts_Rb", ntop= 2000)
+
+plotQC(sce_sample_Nigra, type = "find-pcs", variable = "samples", ntop= 2000)
+
+#plotQC(sce_sample_Nigra, type = "find-pcs", variable = "batches", ntop= 2000)
+
+plotQC(sce_sample_Nigra, type = "find-pcs", variable = "assignments$phases", ntop= 2000)
+
+plotQC(sce_sample_Nigra, type = "find-pcs", variable = "total_counts_Mt", ntop=2000)
+
+plotQC(sce_sample_Nigra, type = "find-pcs", variable = "pct_counts_Mt", ntop= 2000)
+
+plotQC(sce_sample_Nigra, type = "find-pcs", variable = "pct_counts_Rb", ntop= 2000)
+
+plotQC(sce_sample_Nigra, type = "find-pcs", variable = "total_features", ntop= 2000)
+
+plotQC(sce_sample_Nigra, type = "find-pcs", variable = "pct_counts_feature_control", ntop=2000)
+
+
+
+```
+
+# Analysis of Data in Seurat (V2.3.4)
+
+## Read in sample data and setup the Seurat Object based on the aggregation of N4 and N4B in Cell Ranger
+
++ all features in Seurat have been configured to work with sparse matrices which result in memory and speed savings for 10x data.
+```{r init, message=TRUE}
+library(Seurat)
+library(dplyr)
+
+# load all non-normalised or downsampled for read depth nigra samples seperately
+sample_N3_data <- Read10X(data.dir = "/home/dpag0891/Documents/10x_scN_tara_human/Samples_merged/Sample_6_N3_merged/filtered_gene_bc_matrices/GRCh38-premrna")
+sample_N4_data <- Read10X(data.dir = "/home/dpag0891/Documents/10x_scN_tara_human/Samples_merged/Sample_7_N4_1lane_only/filtered_gene_bc_matrices/GRCh38-premrna")
+sample_N5_data <- Read10X(data.dir = "/home/dpag0891/Documents/10x_scN_tara_human/Samples_merged/Sample_8_N5_1lane_only/filtered_gene_bc_matrices/GRCh38-premrna")
+sample_N1B_data <- Read10X(data.dir = "/home/dpag0891/Documents/10x_scN_tara_human/Samples_merged/Sample_10_N1B_merged/filtered_gene_bc_matrices/GRCh38-premrna")
+sample_N2B_data <- Read10X(data.dir = "/home/dpag0891/Documents/10x_scN_tara_human/Samples_merged/Sample_12_N2B_merged/filtered_gene_bc_matrices/GRCh38-premrna")
+sample_N4B_data <- Read10X(data.dir = "/home/dpag0891/Documents/10x_scN_tara_human/Samples_merged/Sample_14_N4B_1lane_only/filtered_gene_bc_matrices/GRCh38-premrna")
+sample_N5B_data <- Read10X(data.dir = "/home/dpag0891/Documents/10x_scN_tara_human/Samples_merged/Sample_16_N5B_1lane_only/filtered_gene_bc_matrices/GRCh38-premrna")
+
+
+#To modify your cell names, I would suggest changing the column names of your initial matrix. For example, to prepend 'S1_' to each of your cell names in your #initial expression matrix:
+
+colnames(x = sample_N3_data) <- paste('N3', colnames(x = sample_N3_data), sep = '_')
+colnames(x = sample_N4_data) <- paste('N4', colnames(x = sample_N4_data), sep = '_')
+colnames(x = sample_N5_data) <- paste('N5', colnames(x = sample_N5_data), sep = '_')
+colnames(x = sample_N1B_data) <- paste('N1B', colnames(x = sample_N1B_data), sep = '_')
+colnames(x = sample_N2B_data) <- paste('N2B', colnames(x = sample_N2B_data), sep = '_')
+colnames(x = sample_N4B_data) <- paste('N4B', colnames(x = sample_N4B_data), sep = '_')
+colnames(x = sample_N5B_data) <- paste('N5B', colnames(x = sample_N5B_data), sep = '_')
+
+
+
+# Examine the memory savings between regular and sparse matrices
+#dense.size <- object.size(x = as.matrix(x = sample_Nigra_data))
+#dense.size
+#sparse.size <- object.size(x = sample_Nigra_data)
+#sparse.size
+#dense.size / sparse.size
+
+# Also read in a list of cell cycle markers, from Tirosh et al, 2015
+cc.genes <- readLines(con = "/home/dpag0891/Documents/10x_scN_tara_human/Seurat_tutorial/regev_lab_cell_cycle_genes.txt")
+
+# We can segregate this list into markers of G2/M phase and markers of S
+# phase
+s.genes <- cc.genes[1:43]
+g2m.genes <- cc.genes[44:97]
+
+
+```
+
+## Create a Seurat object with the raw non-normalised data for each nigra sample
+
+
+```{r create.object, results='hide', message=FALSE}
+# Initialize the Seurat object with the raw (non-normalized data).
+# Keep all genes expressed in >= 3 cells (~0.1% of the data). Keep all cells with at least 200 detected genes
+#sample_N4_N4B<- CreateSeuratObject(raw.data = sample_N4_N4B_data, min.cells = 3, min.genes = 200, project = "10X_SN_sample_N4_N4B")
+#sample_Nigra<- CreateSeuratObject(raw.data = sample_Nigra_data, min.cells = 1, min.genes =1, project = "10X_SN_sample_Nigra")
+#head(x = sample_Nigra@cell.names)
+#sample_Nigra <-StashIdent(sample_Nigra, save.name = "origIdent")
+
+#samples <- read.csv(file.path("~/Documents/10x_scN_tara_human/Samples_merged/Sample_8N5_16N5B", "aggregation_csv.csv"), stringsAsFactors=F)
+#samples <- read.csv(file.path("/home/dpag0891/Documents/10x_scN_tara_human/Samples_merged/Sample_7N4_14N4B", "Aggregation.csv"), stringsAsFactors=F)
+#samples <- read.csv(file.path("C:/Users/Devika/Documents/10x_scN_tara_human/Samples_merged/Sample_7N4_14N4B", "Aggregation.csv"), stringsAsFactors=F)
+
+#cellcodes <- as.data.frame(sample_Nigra@raw.data@Dimnames[[2]])
+#colnames(cellcodes) <- "barcodes"
+#rownames(cellcodes) <- cellcodes$barcodes
+#cellcodes$libcodes <- as.factor(gsub(pattern=".+-", replacement="", cellcodes$barcodes))
+#cellcodes$samples <- as.vector(samples$library_id[cellcodes$libcodes])
+#cellcodes$batches <- as.factor(samples$Batch[cellcodes$libcodes])
+
+sampleidentity <- cellcodes["samples"]
+#batches <- cellcodes["batches"]
+sample_N3 <- CreateSeuratObject(raw.data = sample_N3_data, min.cells = 3, min.genes = 200, project = "sample_N3")
+sample_N4 <- CreateSeuratObject(raw.data = sample_N4_data, min.cells = 3, min.genes = 200, project = "sample_N4")
+sample_N5 <- CreateSeuratObject(raw.data = sample_N5_data, min.cells = 3, min.genes = 200, project = "sample_N5")
+sample_N1B <- CreateSeuratObject(raw.data = sample_N1B_data, min.cells = 3, min.genes = 200, project = "sample_N1B")
+sample_N2B <- CreateSeuratObject(raw.data = sample_N2B_data, min.cells = 3, min.genes = 200, project = "sample_N2B")
+sample_N4B <- CreateSeuratObject(raw.data = sample_N4B_data, min.cells = 3, min.genes = 200, project = "sample_N4B")
+sample_N5B <- CreateSeuratObject(raw.data = sample_N5B_data, min.cells = 3, min.genes = 200, project = "sample_N5B")
+
+
+
+#sample_Nigra_negbinom<- CreateSeuratObject(raw.data = sample_Nigra_data, min.cells = 10, min.genes = 200, project = "10X_SN_sample_Nigra",meta.data =sampleidentity)
+```
+
+***
+
+### Standard pre-processing workflow
+The steps below encompass the standard pre-processing workflow for scRNA-seq data in Seurat. These represent the creation of a Seurat object, the selection and filtration of cells based on QC metrics, data normalization and scaling, and the detection of highly variable genes. In previous versions, we grouped many of these steps together in the `Setup` function, but in v2, we separate these steps into a clear and sequential workflow.
+
+
+### QC and selecting cells for further analysis
+While the `CreateSeuratObject` imposes a basic minimum gene-cutoff, you may want to filter out cells at this stage based on technical or biological parameters. Seurat allows you to easily explore QC metrics and filter cells based on any user-defined criteria. In the example below, we visualize gene and molecule counts, plot their relationship, and exclude cells with a clear outlier number of genes detected as potential multiplets. Of course this is not a guaranteed method to exclude cell doublets, but we include this as an example of filtering user-defined outlier cells. We also filter cells based on the percentage of mitochondrial genes present.
+
+```{r qc, results='hide', fig.height=7,fig.width=13}
+# The number of genes and UMIs (nGene and nUMI) are automatically calculated for every object by Seurat.
+# For non-UMI data, nUMI represents the sum of the non-normalized values within a cell
+# We calculate the percentage of mitochondrial genes here and store it in percent.mito using AddMetaData.
+# We use object@raw.data since this represents non-transformed and non-log-normalized counts
+# The % of UMI mapping to MT-genes is a common scRNA-seq QC metric.
+mito.genes_N1B <- grep(pattern = "^MT-", x = rownames(x = sample_N1B@data), value = TRUE)
+
+percent.mito_N1B <- Matrix::colSums(sample_N1B@raw.data[mito.genes_N1B, ]) / Matrix::colSums(sample_N1B@raw.data)
+
+mito.genes_N2B <- grep(pattern = "^MT-", x = rownames(x = sample_N2B@data), value = TRUE)
+
+percent.mito_N2B <- Matrix::colSums(sample_N2B@raw.data[mito.genes_N2B, ]) / Matrix::colSums(sample_N2B@raw.data)
+
+
+mito.genes_N3 <- grep(pattern = "^MT-", x = rownames(x = sample_N3@data), value = TRUE)
+
+percent.mito_N3 <- Matrix::colSums(sample_N3@raw.data[mito.genes_N3, ]) / Matrix::colSums(sample_N3@raw.data)
+
+mito.genes_N4 <- grep(pattern = "^MT-", x = rownames(x = sample_N4@data), value = TRUE)
+
+percent.mito_N4 <- Matrix::colSums(sample_N4@raw.data[mito.genes_N4, ]) / Matrix::colSums(sample_N4@raw.data)
+
+
+mito.genes_N4B <- grep(pattern = "^MT-", x = rownames(x = sample_N4B@data), value = TRUE)
+
+percent.mito_N4B <- Matrix::colSums(sample_N4B@raw.data[mito.genes_N4B, ]) / Matrix::colSums(sample_N4B@raw.data)
+
+
+mito.genes_N5 <- grep(pattern = "^MT-", x = rownames(x = sample_N5@data), value = TRUE)
+
+percent.mito_N5 <- Matrix::colSums(sample_N5@raw.data[mito.genes_N5, ]) / Matrix::colSums(sample_N5@raw.data)
+
+mito.genes_N5B <- grep(pattern = "^MT-", x = rownames(x = sample_N5B@data), value = TRUE)
+
+percent.mito_N5B <- Matrix::colSums(sample_N5B@raw.data[mito.genes_N5B, ]) / Matrix::colSums(sample_N5B@raw.data)
+
+# calculate the percentage of ribosomal genes and store it in percent.ribo using ADD MEtadata
+# the % of UMI mapping to Ribo genes can also be used as a QC metric
+
+
+library(stringr)
+#SL Ribosomal proteins 
+ribo.genes_N1B <- grep(pattern = "^RP[SL][[:digit:]]", x = rownames(x = sample_N1B@data), value = TRUE)
+#ribo.genes <- ribo.genes[which(str_detect(ribo.genes,"MRPL")==FALSE)]
+#ribo.genes <-  ribo.genes[which(str_detect(ribo.genes,"MRPS")==FALSE)]
+percent.ribo_N1B <- Matrix::colSums(sample_N1B@raw.data[ribo.genes_N1B, ])/Matrix::colSums(sample_N1B@raw.data)
+
+ribo.genes_N2B <- grep(pattern = "^RP[SL][[:digit:]]", x = rownames(x = sample_N2B@data), value = TRUE)
+#ribo.genes <- ribo.genes[which(str_detect(ribo.genes,"MRPL")==FALSE)]
+#ribo.genes <-  ribo.genes[which(str_detect(ribo.genes,"MRPS")==FALSE)]
+percent.ribo_N2B <- Matrix::colSums(sample_N2B@raw.data[ribo.genes_N2B, ])/Matrix::colSums(sample_N2B@raw.data)
+
+ribo.genes_N3 <- grep(pattern = "^RP[SL][[:digit:]]", x = rownames(x = sample_N3@data), value = TRUE)
+#ribo.genes <- ribo.genes[which(str_detect(ribo.genes,"MRPL")==FALSE)]
+#ribo.genes <-  ribo.genes[which(str_detect(ribo.genes,"MRPS")==FALSE)]
+percent.ribo_N3 <- Matrix::colSums(sample_N3@raw.data[ribo.genes_N3, ])/Matrix::colSums(sample_N3@raw.data)
+
+ribo.genes_N4 <- grep(pattern = "^RP[SL][[:digit:]]", x = rownames(x = sample_N4@data), value = TRUE)
+#ribo.genes <- ribo.genes[which(str_detect(ribo.genes,"MRPL")==FALSE)]
+#ribo.genes <-  ribo.genes[which(str_detect(ribo.genes,"MRPS")==FALSE)]
+percent.ribo_N4 <- Matrix::colSums(sample_N4@raw.data[ribo.genes_N4, ])/Matrix::colSums(sample_N4@raw.data)
+
+ribo.genes_N4B <- grep(pattern = "^RP[SL][[:digit:]]", x = rownames(x = sample_N4B@data), value = TRUE)
+#ribo.genes <- ribo.genes[which(str_detect(ribo.genes,"MRPL")==FALSE)]
+#ribo.genes <-  ribo.genes[which(str_detect(ribo.genes,"MRPS")==FALSE)]
+percent.ribo_N4B <- Matrix::colSums(sample_N4B@raw.data[ribo.genes_N4B, ])/Matrix::colSums(sample_N4B@raw.data)
+
+ribo.genes_N5 <- grep(pattern = "^RP[SL][[:digit:]]", x = rownames(x = sample_N5@data), value = TRUE)
+#ribo.genes <- ribo.genes[which(str_detect(ribo.genes,"MRPL")==FALSE)]
+#ribo.genes <-  ribo.genes[which(str_detect(ribo.genes,"MRPS")==FALSE)]
+percent.ribo_N5 <- Matrix::colSums(sample_N5@raw.data[ribo.genes_N5, ])/Matrix::colSums(sample_N5@raw.data)
+
+ribo.genes_N5B <- grep(pattern = "^RP[SL][[:digit:]]", x = rownames(x = sample_N5B@data), value = TRUE)
+#ribo.genes <- ribo.genes[which(str_detect(ribo.genes,"MRPL")==FALSE)]
+#ribo.genes <-  ribo.genes[which(str_detect(ribo.genes,"MRPS")==FALSE)]
+percent.ribo_N5B <- Matrix::colSums(sample_N5B@raw.data[ribo.genes_N5B, ])/Matrix::colSums(sample_N5B@raw.data)
+
+
+
+# AddMetaData adds columns to object@meta.data, and is a great place to stash QC stats, add percent.mito and percent.ribo
+sample_N1B<- AddMetaData(object = sample_N1B, metadata = percent.mito_N1B, col.name = "percent.mito")
+sample_N1B <- AddMetaData(object = sample_N1B, metadata = percent.ribo_N1B, col.name = "percent.ribo")
+sample_N1B@meta.data$sample <- "N1B"
+sample_N1B@meta.data$batch <- "Day2"
+
+sample_N2B<- AddMetaData(object = sample_N2B, metadata = percent.mito_N2B, col.name = "percent.mito")
+sample_N2B <- AddMetaData(object = sample_N2B, metadata = percent.ribo_N2B, col.name = "percent.ribo")
+sample_N2B@meta.data$sample <- "N2B"
+sample_N2B@meta.data$batch <- "Day2"
+
+sample_N3<- AddMetaData(object = sample_N3, metadata = percent.mito_N3, col.name = "percent.mito")
+sample_N3 <- AddMetaData(object = sample_N3, metadata = percent.ribo_N3, col.name = "percent.ribo")
+sample_N3@meta.data$sample <- "N3"
+sample_N3@meta.data$batch <- "Day1"
+
+
+sample_N4<- AddMetaData(object = sample_N4, metadata = percent.mito_N4, col.name = "percent.mito")
+sample_N4 <- AddMetaData(object = sample_N4, metadata = percent.ribo_N4, col.name = "percent.ribo")
+sample_N4@meta.data$sample <- "N4"
+sample_N4@meta.data$batch <- "Day1"
+
+sample_N4B<- AddMetaData(object = sample_N4B, metadata = percent.mito_N4B, col.name = "percent.mito")
+sample_N4B <- AddMetaData(object = sample_N4B, metadata = percent.ribo_N4B, col.name = "percent.ribo")
+sample_N4B@meta.data$sample <- "N4B"
+sample_N4B@meta.data$batch <- "Day2"
+
+sample_N5<- AddMetaData(object = sample_N5, metadata = percent.mito_N5, col.name = "percent.mito")
+sample_N5 <- AddMetaData(object = sample_N5, metadata = percent.ribo_N5, col.name = "percent.ribo")
+sample_N5@meta.data$sample <- "N5"
+sample_N5@meta.data$batch <- "Day1"
+
+sample_N5B<- AddMetaData(object = sample_N5B, metadata = percent.mito_N5B, col.name = "percent.mito")
+sample_N5B <- AddMetaData(object = sample_N5B, metadata = percent.ribo_N5B, col.name = "percent.ribo")
+sample_N5B@meta.data$sample <- "N5B"
+sample_N5B@meta.data$batch <- "Day2"
+
+#sample_Nigra <- AddMetaData(object = sample_Nigra, metadata = batches, col.name = "batches")
+
+#sample_Nigra_negbinom<- AddMetaData(object = sample_Nigra_negbinom, metadata = percent.mito, col.name = "percent.mito")
+#sample_Nigra_negbinom <- AddMetaData(object = sample_Nigra_negbinom, metadata = percent.ribo, col.name = "percent.ribo")
+#sample_Nigra_negbinom <- AddMetaData(object = sample_Nigra_negbinom, metadata = batches, col.name = "batches")
+
+VlnPlot(object = sample_N1B, features.plot = c("nGene", "nUMI", "percent.mito","percent.ribo"), nCol = 4)
+VlnPlot(object = sample_N2B, features.plot = c("nGene", "nUMI", "percent.mito","percent.ribo"), nCol = 4)
+VlnPlot(object = sample_N3, features.plot = c("nGene", "nUMI", "percent.mito","percent.ribo"), nCol = 4)
+VlnPlot(object = sample_N4, features.plot = c("nGene", "nUMI", "percent.mito","percent.ribo"), nCol = 4)
+VlnPlot(object = sample_N4B, features.plot = c("nGene", "nUMI", "percent.mito","percent.ribo"), nCol = 4)
+VlnPlot(object = sample_N5, features.plot = c("nGene", "nUMI", "percent.mito","percent.ribo"), nCol = 4)
+VlnPlot(object = sample_N5B, features.plot = c("nGene", "nUMI", "percent.mito","percent.ribo"), nCol = 4)
+
+
+#VlnPlot(object = sample_Nigra, features.plot = c("nGene", "nUMI", "percent.mito","percent.ribo"), nCol = 4, group.by = "batches")
+
+# GenePlot is typically used to visualize gene-gene relationships, but can be used for anything 
+# calculated by the object, i.e. columns in object@meta.data, PC scores etc.
+# Since there is a rare subset of cells with an outlier level of high mitochondrial percentage and hit ribosome percentage
+# and also low UMI content, we filter these as well
+par(mfrow = c(1, 2))
+GenePlot(object = sample_N1B, gene1 = "nUMI", gene2 = "percent.mito")
+GenePlot(object = sample_N1B, gene1 = "nUMI", gene2 = "nGene")
+GenePlot(object = sample_N1B, gene1 = "nUMI", gene2 = "percent.ribo")
+
+par(mfrow = c(1, 2))
+GenePlot(object = sample_N2B, gene1 = "nUMI", gene2 = "percent.mito")
+GenePlot(object = sample_N2B, gene1 = "nUMI", gene2 = "nGene")
+GenePlot(object = sample_N2B, gene1 = "nUMI", gene2 = "percent.ribo")
+
+par(mfrow = c(1, 2))
+GenePlot(object = sample_N3, gene1 = "nUMI", gene2 = "percent.mito")
+GenePlot(object = sample_N3, gene1 = "nUMI", gene2 = "nGene")
+GenePlot(object = sample_N3, gene1 = "nUMI", gene2 = "percent.ribo")
+
+par(mfrow = c(1, 2))
+GenePlot(object = sample_N4, gene1 = "nUMI", gene2 = "percent.mito")
+GenePlot(object = sample_N4, gene1 = "nUMI", gene2 = "nGene")
+GenePlot(object = sample_N4, gene1 = "nUMI", gene2 = "percent.ribo")
+
+par(mfrow = c(1, 2))
+GenePlot(object = sample_N4B, gene1 = "nUMI", gene2 = "percent.mito")
+GenePlot(object = sample_N4B, gene1 = "nUMI", gene2 = "nGene")
+GenePlot(object = sample_N4B, gene1 = "nUMI", gene2 = "percent.ribo")
+
+par(mfrow = c(1, 2))
+GenePlot(object = sample_N5, gene1 = "nUMI", gene2 = "percent.mito")
+GenePlot(object = sample_N5, gene1 = "nUMI", gene2 = "nGene")
+GenePlot(object = sample_N5, gene1 = "nUMI", gene2 = "percent.ribo")
+
+par(mfrow = c(1, 2))
+GenePlot(object = sample_N5B, gene1 = "nUMI", gene2 = "percent.mito")
+GenePlot(object = sample_N5B, gene1 = "nUMI", gene2 = "nGene")
+GenePlot(object = sample_N5B, gene1 = "nUMI", gene2 = "percent.ribo")
+```
+***
+
+***
+### Normalizing the data
+
+After removing unwanted cells from the dataset, the next step is to normalize the data. By default, we employ a global-scaling normalization method "LogNormalize" that normalizes the gene expression measurements for each cell by the total expression, multiplies this by a scale factor (10,000 by default), and log-transforms the result. 
+
+```{r normalize, results='hide'}
+# We filter out cells that have unique gene counts over 10,000 or less than 200
+# Note that low.thresholds and high.thresholds are used to define a 'gate'.
+# -Inf and Inf should be used if you don't want a lower or upper threshold.
+sample_N1B<- FilterCells(object = sample_N1B, subset.names = c("nGene", "percent.mito", "percent.ribo"), low.thresholds = c(500, -Inf, -Inf), high.thresholds = c(5500, 0.05,0.05))
+
+sample_N2B<- FilterCells(object = sample_N2B, subset.names = c("nGene", "percent.mito", "percent.ribo"), low.thresholds = c(500, -Inf, -Inf), high.thresholds = c(8500, 0.05,0.05))
+
+sample_N3<- FilterCells(object = sample_N3, subset.names = c("nGene", "percent.mito", "percent.ribo"), low.thresholds = c(500, -Inf, -Inf), high.thresholds = c(8000, 0.05,0.05))
+
+sample_N4<- FilterCells(object = sample_N4, subset.names = c("nGene", "percent.mito", "percent.ribo"), low.thresholds = c(500, -Inf, -Inf), high.thresholds = c(7500, 0.05,0.05))
+
+sample_N4B<- FilterCells(object = sample_N4B, subset.names = c("nGene", "percent.mito", "percent.ribo"), low.thresholds = c(500, -Inf, -Inf), high.thresholds = c(8000, 0.05,0.05))
+
+sample_N5<- FilterCells(object = sample_N5, subset.names = c("nGene", "percent.mito", "percent.ribo"), low.thresholds = c(500, -Inf, -Inf), high.thresholds = c(8000, 0.05,0.05))
+
+sample_N5B<- FilterCells(object = sample_N5B, subset.names = c("nGene", "percent.mito", "percent.ribo"), low.thresholds = c(500, -Inf, -Inf), high.thresholds = c(8500, 0.05,0.05))
+
+
+sample_N1B <- NormalizeData(object = sample_N1B, normalization.method = "LogNormalize", scale.factor = 1e4)
+sample_N2B <- NormalizeData(object = sample_N2B, normalization.method = "LogNormalize", scale.factor = 1e4)
+sample_N3 <- NormalizeData(object = sample_N3, normalization.method = "LogNormalize", scale.factor = 1e4)
+sample_N4 <- NormalizeData(object = sample_N4, normalization.method = "LogNormalize", scale.factor = 1e4)
+sample_N4B <- NormalizeData(object = sample_N4B, normalization.method = "LogNormalize", scale.factor = 1e4)
+sample_N5 <- NormalizeData(object = sample_N5, normalization.method = "LogNormalize", scale.factor = 1e4)
+sample_N5B <- NormalizeData(object = sample_N5B, normalization.method = "LogNormalize", scale.factor = 1e4)
+#par(mfrow = c(1, 2))
+#GenePlot(object = sample_Nigra, gene1 = "nUMI", gene2 = "percent.mito")
+#GenePlot(object = sample_Nigra, gene1 = "nUMI", gene2 = "nGene")
+#GenePlot(object = sample_Nigra, gene1 = "nUMI", gene2 = "percent.ribo")
+```
+
+
+```{r normalize, results='hide'}
+# We filter out cells that have unique gene counts over 10,000 or less than 200
+# Note that low.thresholds and high.thresholds are used to define a 'gate'.
+# -Inf and Inf should be used if you don't want a lower or upper threshold.
+#sample_Nigra_negbinom<- FilterCells(object = sample_Nigra_negbinom, subset.names = c("nGene", "percent.mito", "percent.ribo"), low.thresholds = c(200, -Inf, -Inf), high.thresholds = c(11000, 0.05,0.02))
+
+
+#sample_Nigra_negbinom <- NormalizeData(object = sample_Nigra_negbinom, normalization.method = "LogNormalize", scale.factor = 1e4)
+#par(mfrow = c(1, 2))
+#GenePlot(object = sample_Nigra, gene1 = "nUMI", gene2 = "percent.mito")
+#GenePlot(object = sample_Nigra, gene1 = "nUMI", gene2 = "nGene")
+#GenePlot(object = sample_Nigra, gene1 = "nUMI", gene2 = "percent.ribo")
+```
+### Detection of variable genes across the single cells
+
+Seurat calculates highly variable genes and focuses on these for downstream analysis. **`FindVariableGenes`** calculates the average expression and dispersion for each gene, places these genes into bins, and then calculates a z-score for dispersion within each bin. This helps control for the relationship between variability and average expression. This function is unchanged from (Macosko *et al*.), but new methods for variable gene expression identification are coming soon. We suggest that users set these parameters to mark visual outliers on the dispersion plot, but the exact parameter settings may vary based on the data type, heterogeneity in the sample, and normalization strategy. The parameters here identify ~2,000 variable genes, and represent typical parameter settings for UMI data that is normalized to a total of 1e4 molecules.
+
+```{r var_genes, fig.height=7, fig.width=11, results='hide'}
+sample_N1B <- FindVariableGenes(object = sample_N1B, mean.function = ExpMean, dispersion.function = LogVMR, x.low.cutoff = 0.0125, x.high.cutoff = 3.0, y.cutoff = 0.5)
+sample_N2B <- FindVariableGenes(object = sample_N2B, mean.function = ExpMean, dispersion.function = LogVMR, x.low.cutoff = 0.0125, x.high.cutoff = 3.0, y.cutoff = 0.5)
+sample_N3 <- FindVariableGenes(object = sample_N3, mean.function = ExpMean, dispersion.function = LogVMR, x.low.cutoff = 0.0125, x.high.cutoff = 3.0, y.cutoff = 0.5)
+sample_N4 <- FindVariableGenes(object = sample_N4, mean.function = ExpMean, dispersion.function = LogVMR, x.low.cutoff = 0.0125, x.high.cutoff = 3.0, y.cutoff = 0.5)
+sample_N4B <- FindVariableGenes(object = sample_N4B, mean.function = ExpMean, dispersion.function = LogVMR, x.low.cutoff = 0.0125, x.high.cutoff = 3.0, y.cutoff = 0.5)
+sample_N5 <- FindVariableGenes(object = sample_N5, mean.function = ExpMean, dispersion.function = LogVMR, x.low.cutoff = 0.0125, x.high.cutoff = 3.0, y.cutoff = 0.5)
+sample_N5B <- FindVariableGenes(object = sample_N5B, mean.function = ExpMean, dispersion.function = LogVMR, x.low.cutoff = 0.0125, x.high.cutoff = 3.0, y.cutoff = 0.5)
+
+
+```
+
+```{r var_genes, fig.height=7, fig.width=11, results='hide'}
+#sample_Nigra_negbinom<- FindVariableGenes(object = sample_Nigra_negbinom, mean.function = ExpMean, dispersion.function = LogVMR, x.low.cutoff = 0.0125, x.high.cutoff = 3.0, y.cutoff = 0.5,y.high.cutoff =16 )
+```
+
+```{r len_var_genes}
+length(x = sample_N1B@var.genes)
+length(x = sample_N2B@var.genes)
+length(x = sample_N3@var.genes)
+length(x = sample_N4@var.genes)
+length(x = sample_N4B@var.genes)
+length(x = sample_N5@var.genes)
+length(x = sample_N5B@var.genes)
+```
+
+
+***
+
+### Scaling the data and removing unwanted sources of variation
+
+Your single cell dataset likely contains 'uninteresting' sources of variation. This could include not only technical noise, but batch effects, or even biological sources of variation (cell cycle stage). As suggested in [Buettner *et al*, NBT, 2015](https://www.nature.com/articles/nbt.3102), regressing these signals out of the analysis can improve downstream dimensionality reduction and clustering. To mitigate the effect of these signals, Seurat constructs linear models to predict gene expression based on user-defined variables. The scaled z-scored residuals of these models are stored in the scale.data slot, and  are used for dimensionality reduction and clustering. 
+
+We can regress out cell-cell variation in gene expression driven by batch (if applicable), cell alignment rate (as provided by Drop-seq tools for Drop-seq data),  the number of detected molecules, and mitochondrial gene expression. For cycling cells, we can also learn a 'cell-cycle' score (see example [here](http://satijalab.org/seurat/cell_cycle_vignette.html)) and regress this out as well. In this simple example here for post-mitotic blood cells, we regress on the number of detected molecules per cell as well as the percentage mitochondrial gene content.  
+
+Seurat v2.0 implements this regression as part of the data scaling process. Therefore, the `RegressOut` function has been deprecated, and replaced with the vars.to.regress argument in `ScaleData`.
+
+regress out the technical factors (nUMI, percent.ribo, percent.mito)
+look to see if cell cycle needs to be regressed and then regress that out
+
+```{r regress, fig.height=7, fig.width=11, results='hide'}
+
+sample_N1B <- ScaleData(object = sample_N1B,vars.to.regress = c("nUMI", "percent.mito", "percent.ribo"), model.use = "linear", do.par = T)
+sample_N2B <- ScaleData(object = sample_N2B,vars.to.regress = c("nUMI", "percent.mito", "percent.ribo"), model.use = "linear", do.par = T)
+sample_N3 <- ScaleData(object = sample_N3,vars.to.regress = c("nUMI", "percent.mito", "percent.ribo"), model.use = "linear", do.par = T)
+sample_N4 <- ScaleData(object = sample_N4,vars.to.regress = c("nUMI", "percent.mito", "percent.ribo"), model.use = "linear", do.par = T)
+sample_N4B <- ScaleData(object = sample_N4B,vars.to.regress = c("nUMI", "percent.mito", "percent.ribo"), model.use = "linear", do.par = T)
+sample_N5 <- ScaleData(object = sample_N5,vars.to.regress = c("nUMI", "percent.mito", "percent.ribo"), model.use = "linear", do.par = T)
+sample_N5B <- ScaleData(object = sample_N5B,vars.to.regress = c("nUMI", "percent.mito", "percent.ribo"), model.use = "linear", do.par = T)
+
+
+#sample_Nigra_negbinom <- ScaleData(object = sample_Nigra_negbinom,vars.to.regress = c("nUMI","samples", "percent.mito", "percent.ribo"), model.use = "negbinom")
+```
+
+```{r sample_identity_PCA  fig.height=10, fig.width=8, warning=FALSE}
+sample_N1B <- RunPCA(object = sample_N1B, pc.genes = sample_N1B@var.genes, do.print = T, pcs.compute = 50)
+sample_N2B <- RunPCA(object = sample_N2B, pc.genes = sample_N2B@var.genes, do.print = T, pcs.compute = 50)
+sample_N3 <- RunPCA(object = sample_N3, pc.genes = sample_N3@var.genes, do.print = T, pcs.compute = 50)
+sample_N4 <- RunPCA(object = sample_N4, pc.genes = sample_N4@var.genes, do.print = T, pcs.compute = 50)
+sample_N4B <- RunPCA(object = sample_N4B, pc.genes = sample_N4B@var.genes, do.print = T, pcs.compute = 50)
+sample_N5 <- RunPCA(object = sample_N5, pc.genes = sample_N5@var.genes, do.print = T, pcs.compute = 50)
+sample_N5B <- RunPCA(object = sample_N5B, pc.genes = sample_N5B@var.genes, do.print = T, pcs.compute = 50)
+
+#PCA plot to see if sample idenitity has an effect on PCA
+#PCAPlot(object = sample_Nigra, group.by="samples")
+#PCAPlot(object = sample_Nigra, dim.1=2,dim.2=3, group.by="samples")
+#PCAPlot(object = sample_Nigra, dim.1=1,dim.2=3, group.by="samples")
+#PCAPlot(object = sample_Nigra, dim.1=4,dim.2=5, group.by="samples")
+#PCAPlot(object = sample_Nigra, dim.1=5,dim.2=6, group.by="samples")
+#PCAPlot(object = sample_Nigra, group.by="samples")
+#PCAPlot(object = sample_Nigra, dim.1=2,dim.2=3, group.by="batches")
+#PCAPlot(object = sample_Nigra, dim.1=1,dim.2=3, group.by="batches")
+#PCAPlot(object = sample_Nigra, dim.1=4,dim.2=5, group.by="batches")
+#PCAPlot(object = sample_Nigra, dim.1=5,dim.2=6, group.by="batches")
+#based on PCA , aggregated, read-depth normalised samples dont seperate by sample identities after regressing out sample effect
+```
+
+
+
+****
+
+
+Assign Cell-Cycle Scores
+First, we assign each cell a score, based on its expression of G2/M and S phase markers. These marker sets should be anticorrelated in their expression levels, and cells expressing neither are likely not cycling and in G1 phase.
+
+We assign scores in the CellCycleScoring function, which stores S and G2/M scores in object@meta.data, along with the predicted classification of each cell in either G2M, S or G1 phase. CellCycleScoring can also set the identity of the Seurat object to the cell-cycle phase by passing set.ident = TRUE (the original identities are stored as old.ident). Please note that Seurat does not use the discrete classifications (G2M/G1/S) in downstream cell cycle regression. Instead, it uses the quantitative scores for G2M and S phase. However, we provide our predicted classifications in case they are of interest.
+
+
+```{r cell_cycle_scores, fig.height=6, fig.width=8, warning=FALSE}
+
+
+sample_N1B <- CellCycleScoring(object = sample_N1B, s.genes = s.genes, g2m.genes = g2m.genes, 
+    set.ident = TRUE)
+sample_N2B <- CellCycleScoring(object = sample_N2B, s.genes = s.genes, g2m.genes = g2m.genes, 
+    set.ident = TRUE)
+sample_N3 <- CellCycleScoring(object = sample_N3, s.genes = s.genes, g2m.genes = g2m.genes, 
+    set.ident = TRUE)
+sample_N4 <- CellCycleScoring(object = sample_N4, s.genes = s.genes, g2m.genes = g2m.genes, 
+    set.ident = TRUE)
+sample_N4B <- CellCycleScoring(object = sample_N4B, s.genes = s.genes, g2m.genes = g2m.genes, 
+    set.ident = TRUE)
+sample_N5 <- CellCycleScoring(object = sample_N5, s.genes = s.genes, g2m.genes = g2m.genes, 
+    set.ident = TRUE)
+sample_N5B <- CellCycleScoring(object = sample_N5B, s.genes = s.genes, g2m.genes = g2m.genes, 
+    set.ident = TRUE)
+
+# view cell cycle scores and phase assignments
+head(x = sample_Nigra@meta.data)
+# export metadata as dataframe to use cell cycle phasing for scater
+#seurat_metadata <- sample_N4_N4B@meta.data
+# Visualize the distribution of ribosome genes across
+#RidgePlot(object = sample_5_c3, features.plot = c("RPL22","RPL11"),nCol =2)
+# Running a PCA on cell cycle genes reveals that cells dont seperate by cell cycle pphase at all, but heatamp showes there is some effect)
+
+PCAPlot(object = sample_N1B)
+PCAPlot(object = sample_N1B, dim.1=2,dim.2=3)
+PCAPlot(object = sample_N1B, dim.1=1,dim.2=3)
+
+PCAPlot(object = sample_N2B)
+PCAPlot(object = sample_N2B, dim.1=2,dim.2=3)
+PCAPlot(object = sample_N2B, dim.1=1,dim.2=3)
+
+PCAPlot(object = sample_N3)
+PCAPlot(object = sample_N3, dim.1=2,dim.2=3)
+PCAPlot(object = sample_N3, dim.1=1,dim.2=3)
+
+PCAPlot(object = sample_N4)
+PCAPlot(object = sample_N4, dim.1=2,dim.2=3)
+PCAPlot(object = sample_N4, dim.1=1,dim.2=3)
+
+PCAPlot(object = sample_N4B)
+PCAPlot(object = sample_N4B, dim.1=2,dim.2=3)
+PCAPlot(object = sample_N4B, dim.1=1,dim.2=3)
+
+PCAPlot(object = sample_N5)
+PCAPlot(object = sample_N5, dim.1=2,dim.2=3)
+PCAPlot(object = sample_N5, dim.1=1,dim.2=3)
+
+PCAPlot(object = sample_N5B)
+PCAPlot(object = sample_N5B, dim.1=2,dim.2=3)
+PCAPlot(object = sample_N5B, dim.1=1,dim.2=3)
+```
+
+
+
+
+# PC HEatmap to see if cell cycle genes seperate the PCAs
+```{r, PC_Heatmap,fig.height= 10, fig.width=8}
+#PCHeatmap(object = sample_Nigra, pc.use = 1:15, do.balanced = TRUE, label.columns = FALSE, 
+    #remove.key = TRUE)
+RidgePlot(object = sample_N1B, features.plot = c("PCNA", "TOP2A", "MCM6", "NUSAP1", "PRC1", "PLK1", "KIF11", "TYMS","TPX2", "NDC80", "CCNB2"), 
+    nCol = 2)
+RidgePlot(object = sample_N2B, features.plot = c("PCNA", "TOP2A", "MCM6", "NUSAP1", "PRC1", "PLK1", "KIF11", "TYMS","TPX2", "NDC80", "CCNB2"), 
+    nCol = 2)
+RidgePlot(object = sample_N3, features.plot = c("PCNA", "TOP2A", "MCM6", "NUSAP1", "PRC1", "PLK1", "KIF11", "TYMS","TPX2", "NDC80", "CCNB2"), 
+    nCol = 2)
+RidgePlot(object = sample_N4, features.plot = c("PCNA", "KIF2C", "MCM6", "NUSAP1", "PRC1", "PLK1", "KIF11", "TYMS","CENPA", "HMGB2", "CCNB2"), 
+    nCol = 2)
+RidgePlot(object = sample_N5, features.plot = c("PCNA", "KIF2C", "MCM6", "NUSAP1", "PRC1", "PLK1", "KIF11", "TYMS","CENPA", "HMGB2", "CCNB2"), 
+    nCol = 2)
+RidgePlot(object = sample_N4B, features.plot = c("PCNA", "KIF2C", "MCM6", "NUSAP1", "PRC1", "PLK1", "KIF11", "TYMS","CENPA", "HMGB2", "TMPO"), 
+    nCol = 2)
+RidgePlot(object = sample_N5B, features.plot = c("PCNA", "KIF2C", "MCM6", "NUSAP1", "PRC1", "PLK1", "KIF11", "TYMS","CENPA", "HMGB2", "TMPO"), 
+    nCol = 2)
+```
+
+```{r cell_cycle_genes_pca }
+# check to see if cell seperate by the percent of ribogenes, which they do.
+#sample_5_c3 <- RunPCA(object = sample_5_c3, pc.genes = ribo.genes, do.print = T)
+#PCAPlot(object = sample_5_c3)
+# Running a PCA on cell cycle genes reveals, unsurprisingly, that cells
+# separate entirely by phase # not in my case
+sample_N1B <- RunPCA(object = sample_N1B, pc.genes = c(s.genes, g2m.genes), do.print = FALSE)
+PCAPlot(object = sample_N1B)
+PCAPlot(object = sample_N1B, dim.1=2,dim.2=3)
+PCAPlot(object = sample_N1B, dim.1=1,dim.2=3)
+PCAPlot(object = sample_N1B, dim.1=4,dim.2=5)
+PCAPlot(object = sample_N1B, dim.1=5,dim.2=6)
+
+sample_N2B <- RunPCA(object = sample_N2B, pc.genes = c(s.genes, g2m.genes), do.print = FALSE)
+PCAPlot(object = sample_N2B)
+PCAPlot(object = sample_N2B, dim.1=2,dim.2=3)
+PCAPlot(object = sample_N2B, dim.1=1,dim.2=3)
+PCAPlot(object = sample_N2B, dim.1=4,dim.2=5)
+PCAPlot(object = sample_N2B, dim.1=5,dim.2=6)
+
+sample_N3 <- RunPCA(object = sample_N3, pc.genes = c(s.genes, g2m.genes), do.print = FALSE)
+PCAPlot(object = sample_N3)
+PCAPlot(object = sample_N3, dim.1=2,dim.2=3)
+PCAPlot(object = sample_N3, dim.1=1,dim.2=3)
+PCAPlot(object = sample_N3, dim.1=4,dim.2=5)
+PCAPlot(object = sample_N3, dim.1=5,dim.2=6)
+
+sample_N4 <- RunPCA(object = sample_N4, pc.genes = c(s.genes, g2m.genes), do.print = FALSE)
+PCAPlot(object = sample_N4)
+PCAPlot(object = sample_N4, dim.1=2,dim.2=3)
+PCAPlot(object = sample_N4, dim.1=1,dim.2=3)
+PCAPlot(object = sample_N4, dim.1=4,dim.2=5)
+PCAPlot(object = sample_N4, dim.1=5,dim.2=6)
+
+sample_N5 <- RunPCA(object = sample_N5, pc.genes = c(s.genes, g2m.genes), do.print = FALSE)
+PCAPlot(object = sample_N5)
+PCAPlot(object = sample_N5, dim.1=2,dim.2=3)
+PCAPlot(object = sample_N5, dim.1=1,dim.2=3)
+PCAPlot(object = sample_N5, dim.1=4,dim.2=5)
+PCAPlot(object = sample_N5, dim.1=5,dim.2=6)
+
+sample_N4B <- RunPCA(object = sample_N4B, pc.genes = c(s.genes, g2m.genes), do.print = FALSE)
+PCAPlot(object = sample_N4B)
+PCAPlot(object = sample_N4B, dim.1=2,dim.2=3)
+PCAPlot(object = sample_N4B, dim.1=1,dim.2=3)
+PCAPlot(object = sample_N4B, dim.1=4,dim.2=5)
+PCAPlot(object = sample_N4B, dim.1=5,dim.2=6)
+
+sample_N5B <- RunPCA(object = sample_N5B, pc.genes = c(s.genes, g2m.genes), do.print = FALSE)
+PCAPlot(object = sample_N5B)
+PCAPlot(object = sample_N5B, dim.1=2,dim.2=3)
+PCAPlot(object = sample_N5B, dim.1=1,dim.2=3)
+PCAPlot(object = sample_N5B, dim.1=4,dim.2=5)
+PCAPlot(object = sample_N5B, dim.1=5,dim.2=6)
+
+
+```
+
+
+# Cell cycle pahse effect
+For each gene, Seurat models the relationship between gene expression and the S and G2M cell cycle scores. The scaled residuals of this model represent a 'corrected' expression matrix, that can be used downstream for dimensional reduction
+
+
++ As not much effect of cell cycle genes seen in seurat and scater
+# not regressing it out
+```{r PCHeatmap_cell_cycle_genes, fig.height=20 , fig.width=15}
+PCHeatmap(object = sample_N1B, pc.use = 1:20, do.balanced = TRUE, label.columns = FALSE, remove.key = TRUE)
+PCHeatmap(object = sample_N2B, pc.use = 1:20, do.balanced = TRUE, label.columns = FALSE, remove.key = TRUE)
+PCHeatmap(object = sample_N3, pc.use = 1:20, do.balanced = TRUE, label.columns = FALSE, remove.key = TRUE)
+PCHeatmap(object = sample_N4, pc.use = 1:20, do.balanced = TRUE, label.columns = FALSE, remove.key = TRUE)
+PCHeatmap(object = sample_N4B, pc.use = 1:20, do.balanced = TRUE, label.columns = FALSE, remove.key = TRUE)
+PCHeatmap(object = sample_N5, pc.use = 1:20, do.balanced = TRUE, label.columns = FALSE, remove.key = TRUE)
+PCHeatmap(object = sample_N5B, pc.use = 1:20, do.balanced = TRUE, label.columns = FALSE, remove.key = TRUE)
+# regress out cell cycle effect to the already regressed dataset for variables(nUMI,percent.mito,percent.ribo)
+```
+
+
+
+### Perform linear dimensional reduction
+
+Next we perform PCA on the scaled data. By default, the genes in `object@var.genes` are used as input, but can be defined using pc.genes. We have typically found that running dimensionality reduction on highly variable genes can improve performance. However, with UMI data - particularly after regressing out technical variables, we often see that PCA returns similar (albeit slower) results when run on much larger subsets of genes, including the whole transcriptome.
+```{r pca}
+#sample_6_n3 <- ScaleData(object = sample_6_n3, data.use = sample_6_n3@scale.data, vars.to.regress = c("S.Score", "G2M.Score"))
+sample_N1B<- RunPCA(object = sample_N1B, pc.genes = sample_N1B@var.genes, do.print = TRUE, pcs.print = 1:6, genes.print = 20, pcs.compute = 50)
+sample_N2B<- RunPCA(object = sample_N2B, pc.genes = sample_N2B@var.genes, do.print = TRUE, pcs.print = 1:6, genes.print = 20, pcs.compute = 50)
+sample_N3<- RunPCA(object = sample_N3, pc.genes = sample_N3@var.genes, do.print = TRUE, pcs.print = 1:6, genes.print = 20, pcs.compute = 50)
+sample_N4<- RunPCA(object = sample_N4, pc.genes = sample_N4@var.genes, do.print = TRUE, pcs.print = 1:6, genes.print = 20, pcs.compute = 50)
+sample_N4B <- RunPCA(object = sample_N4B, pc.genes = sample_N4B@var.genes, do.print = TRUE, pcs.print = 1:6, genes.print = 20, pcs.compute = 50)
+sample_N5 <- RunPCA(object = sample_N5, pc.genes = sample_N5@var.genes, do.print = TRUE, pcs.print = 1:6, genes.print = 20, pcs.compute = 50)
+sample_N5B <- RunPCA(object = sample_N5B, pc.genes = sample_N5B@var.genes, do.print = TRUE, pcs.print = 1:6, genes.print = 20, pcs.compute = 50)
+```
+
+```{r pca, fig.height=12}
+ library(RColorBrewer)
+col.pal <- RColorBrewer::brewer.pal(9,name= "Blues")
+
+PCHeatmap(object = sample_N1B, pc.use = 1:6, cells.use = 500, do.balanced = TRUE, label.columns = FALSE, use.full = FALSE, col.use = col.pal)
+PCHeatmap(object = sample_N2B, pc.use = 1:6, cells.use = 500, do.balanced = TRUE, label.columns = FALSE, use.full = FALSE, col.use = col.pal)
+PCHeatmap(object = sample_N3, pc.use = 1:6, cells.use = 500, do.balanced = TRUE, label.columns = FALSE, use.full = FALSE, col.use = col.pal)
+PCHeatmap(object = sample_N4, pc.use = 1:6, cells.use = 500, do.balanced = TRUE, label.columns = FALSE, use.full = FALSE, col.use = col.pal)
+PCHeatmap(object = sample_N5, pc.use = 1:6, cells.use = 500, do.balanced = TRUE, label.columns = FALSE, use.full = FALSE, col.use = col.pal)
+PCHeatmap(object = sample_N5B, pc.use = 1:6, cells.use = 500, do.balanced = TRUE, label.columns = FALSE, use.full = FALSE, col.use = col.pal)
+PCHeatmap(object = sample_N4B, pc.use = 1:6, cells.use = 500, do.balanced = TRUE, label.columns = FALSE, use.full = FALSE, col.use = col.pal)
+#sample_6_n3 <- ScaleData(object = sample_6_n3, data.use = sample_6_n3@scale.data, vars.to.regress = c("S.Score", "G2M.Score"))
+#sample_Nigra_negbinom<- RunPCA(object = sample_Nigra_negbinom, pc.genes = sample_Nigra_negbinom@var.genes, do.print = TRUE, pcs.print = 1:6, genes.print = 20, pcs.compute = 50)
+```
+
+
+
+# find the union of a minimum of 3050 genes between the samples (3055 minimum var genes value in one sample)
+
+```{r union_var_genes_samples}
+# Determine genes to use for CCA, must be highly variable in at least 4 datasets
+ob.list <- list(sample_N1B, sample_N2B, sample_N3, sample_N4, sample_N4B, sample_N5, sample_N5B)
+genes.use <- c()
+for (i in 1:length(ob.list)) {
+  genes.use <- c(genes.use, head(rownames(ob.list[[i]]@hvg.info), 3050))
+}
+genes.use <- names(which(table(genes.use) > 4))
+for (i in 1:length(ob.list)) {
+  genes.use <- genes.use[genes.use %in% rownames(ob.list[[i]]@scale.data)]
+}
+```
+
+#RUN multiCCA
+
+```{r}
+# Run multi-set CCA
+Nigra.integrated <- RunMultiCCA(ob.list, genes.use = genes.use, num.ccs = 100, niter=10000)
+```
+
+
+```{r, fig.width=15}
+# visualize results of CCA plot CC1 versus CC2 and look at a violin plot
+p1 <- DimPlot(object = Nigra.integrated, reduction.use = "cca", group.by = "sample", 
+    pt.size = 0.5, do.return = TRUE)
+p2 <- VlnPlot(object = Nigra.integrated, features.plot = "CC1", group.by = "sample", 
+    do.return = TRUE)
+plot_grid(p1, p2)
+
+p1 <- DimPlot(object = Nigra.integrated, reduction.use = "cca", group.by = "batch", 
+    pt.size = 0.5, do.return = TRUE)
+p2 <- VlnPlot(object = Nigra.integrated, features.plot = "CC1", group.by = "batch", 
+    do.return = TRUE)
+plot_grid(p1, p2)
+```
+```{r}
+PrintDim(object = Nigra.integrated, reduction.type = "cca", dims.print = 1:2, 
+    genes.print = 20)
+```
+
+The problem of choosing CCs for downstream analysis such as clustering is analogous to that of choosing PCs and we provide similar functions for exploring which CCs to include. When choosing PCs, often we look for a saturation in the relationship between the number of principle components and the percentage of the variance explained. Here, we provide  MetageneBicorPlot, which examines a measure of correlation strength for each CC and find that this statistic generally saturates after a reasonable number of CCs. 
+
+```{r}
+# CC Selection
+MetageneBicorPlot(Nigra.integrated, grouping.var = "sample", dims.eval = 1:50)
+MetageneBicorPlot(Nigra.integrated, grouping.var = "batch", dims.eval = 1:60)
+```
+
+# based on the Bicor Plot chose CCs 1:25
+# look at the heatmaps of the Dims to see if they seperate ok and visualise the genes
+
+```{r,fig.width=10, fig.height=10}
+DimHeatmap(Nigra.integrated, reduction.type = "cca", cells.use = 500, dim.use = 1:9, do.balanced = T)
+DimHeatmap(Nigra.integrated, reduction.type = "cca", cells.use = 500, dim.use = 10:18, do.balanced = T)
+DimHeatmap(Nigra.integrated, reduction.type = "cca", cells.use = 500, dim.use = 19:28, do.balanced = T)
+```
+#Before we align the subspaces, we first search for cells whose expression profile cannot be 
+#well-explained by low-dimensional CCA, compared to low-dimensional PCA.
+#
+
+```{r, fig.height=8, fig.width=15}
+
+
+# Run rare non-overlapping filtering
+Nigra.integrated <- CalcVarExpRatio(object = Nigra.integrated, reduction.type = "pca",
+                                       grouping.var = "sample", dims.use = 1:25)
+
+# We discard cells where the variance explained by CCA is <2-fold  (ratio < 0.5) compared to PCA
+Nigra.integrated.all.save <- Nigra.integrated
+Nigra.integrated <- SubsetData(Nigra.integrated, subset.name = "var.ratio.pca",
+                                           accept.low = 0.5)
+
+# Alignment
+Nigra.integrated <- AlignSubspace(Nigra.integrated,
+                                     reduction.type = "cca",
+                                     grouping.var = "sample",
+                                     dims.align = 1:25)
+
+
+#We can visualize the aligned CCA and perform an integrated analysis.
+```
+
+```{r}
+p1 <- DimPlot(object = Nigra.integrated, reduction.use = "cca.aligned", group.by = "sample", 
+    pt.size = 0.5, do.return = TRUE)
+p2 <- DimPlot(object = Nigra.integrated, reduction.use = "cca.aligned", group.by = "sample", 
+    pt.size = 0.5, do.return = TRUE, dim.1 = 2, dim.2=3)
+plot_grid(p1, p2)
+
+p1 <- DimPlot(object = Nigra.integrated, reduction.use = "cca.aligned", group.by = "batch", 
+    pt.size = 0.5, do.return = TRUE)
+p2 <- DimPlot(object = Nigra.integrated, reduction.use = "cca.aligned", group.by = "batch", 
+    pt.size = 0.5, do.return = TRUE, dim.1 = 2, dim.2=3)
+plot_grid(p1, p2)
+
+p1 <- VlnPlot(object = Nigra.integrated, features.plot = "ACC1", group.by = "sample", 
+    do.return = TRUE)
+p2 <- VlnPlot(object = Nigra.integrated, features.plot = "ACC2", group.by = "sample", 
+    do.return = TRUE)
+plot_grid(p1, p2)
+
+p1 <- VlnPlot(object = Nigra.integrated, features.plot = "ACC1", group.by = "batch", 
+    do.return = TRUE)
+p2 <- VlnPlot(object = Nigra.integrated, features.plot = "ACC2", group.by = "batch", 
+    do.return = TRUE)
+plot_grid(p1, p2)
+```
+
+```{r}
+# t-SNE and Clustering
+Nigra.integrated <- FindClusters(Nigra.integrated, reduction.type = "cca.aligned",
+                                    dims.use = 1:25, save.SNN = T, resolution = 0.4, n.iter = 1000)
+Nigra.integrated <- RunTSNE(Nigra.integrated,
+                               reduction.use = "cca.aligned",
+                               dims.use = 1:25)
+
+
+```
+
+```{r}
+PrintFindClustersParams(object = Nigra.integrated, resolution = 0.4)
+Nigra.integrated <- SetAllIdent(Nigra.integrated, id = "res.4")
+```
+
+```{r, fig.width=15, fig.height=6}
+# Visualization
+p1 <- TSNEPlot(Nigra.integrated, group.by = "sample", do.return = T, pt.size = 0.5)
+p2 <- TSNEPlot(Nigra.integrated, do.return = T, pt.size = 0.5, do.label = T)
+plot_grid(p1, p2)
+
+p1 <- TSNEPlot(Nigra.integrated, group.by = "ClusterNames_0.4", do.return = T, pt.size = 0.5)
+p2 <- TSNEPlot(Nigra.integrated, do.return = T, pt.size = 0.5, do.label = T)
+ggplot_build(p1)$data
+#plot_grid(p1, p2)
+```
+
+```{r}
+Nigra.integrated@meta.data$full.ident <- paste(Nigra.integrated@meta.data$res.0.4, Nigra.integrated@meta.data$sample, sep = "_")
+```
+
+
+```{r, fig.width=10}
+# Calculate number of cells per cluster from object@ident
+cell.num <- table(Nigra.integrated@meta.data$res.0.4)
+
+# Add cell number per cluster to cluster labels
+ClusterLabels = paste("Cluster",names(cell.num), paste0("(n = ", cell.num, ")"))
+
+# Order legend labels in plot in the same order as 'ClusterLabels'
+ClusterBreaks = names(cell.num)
+colourCount = length(cell.num)
+getPalette = colorRampPalette(brewer.pal(9, "Set1"))
+# Plot tSNE with new legend labels for clusters
+TSNEPlot(object = Nigra.integrated, do.return = T,  pt.size = 1.5) +
+  scale_colour_manual(breaks = ClusterBreaks, 
+                        labels = ClusterLabels, values=getPalette(colourCount)) +
+  labs(x = "t-SNE 1",
+       y = "t-SNE 2")
+
+```
+#sample numbers for TSNE plot
+
+```{r, fig.width=12}
+# Calculate number of cells per cluster from object@ident
+library(RColorBrewer)
+cell.num <- table(Nigra.integrated@meta.data$sample)
+
+# Add cell number per cluster to cluster labels
+ClusterLabels = paste("Sample",names(cell.num), paste0("(n = ", cell.num, ")"))
+
+# Order legend labels in plot in the same order as 'ClusterLabels'
+ClusterBreaks = names(cell.num)
+colourCount = length(cell.num)
+getPalette = colorRampPalette(brewer.pal(9, "Set1"))
+# Plot tSNE with new legend labels for clusters
+TSNEPlot(object = Nigra.integrated, do.return = T,  pt.size = 1.5, group.by="sample") +
+  scale_colour_manual(breaks = ClusterBreaks, 
+                        labels = ClusterLabels, values=getPalette(colourCount)) +
+  labs(x = "t-SNE 1",
+       y = "t-SNE 2")
+
+```
+
+
+
+
+# tSNE coloured by nUMI
+
+```{r}
+nigra.integrated_tSNE <- as.data.frame(Nigra.integrated@dr$tsne@cell.embeddings)
+nigra.integrated_tSNE$nUMI <- Nigra.integrated@meta.data$nUMI
+```
+
+```{r,fig.height=6, fig.width=9}
+ggplot(nigra.integrated_tSNE, aes(x= tSNE_1, y=tSNE_2)) +  
+  geom_point(size=1.2, aes(colour=nUMI)) +
+   theme_bw(base_size=12)+
+  scale_color_gradientn(colors = brewer.pal(11,"Spectral"),limits=c(500,33000), guide = "colourbar")
+```
+
+
+
+
+
+# Identify conserved cell type markers for each cluster across individuals
++ We can also try identify what number of DEG between clusters are conserved across samples
++ however in the end as all samples were not present in all cluster we used the normall FindAllmarkers funciton
+```{r}
+cluster0.markers <- FindConservedMarkers(Nigra.integrated, ident.1 = 0, grouping.var = "sample", test.use="negbinom",
+    print.bar = T)
+cluster1.markers <- FindConservedMarkers(Nigra.integrated, ident.1 = 1, grouping.var = "sample", test.use="negbinom",
+    print.bar = T)
+cluster2.markers <- FindConservedMarkers(Nigra.integrated, ident.1 = 2, grouping.var = "batch", test.use="negbinom",
+    print.bar = T)
+cluster3.markers <- FindConservedMarkers(Nigra.integrated, ident.1 = 3, grouping.var = "sample", test.use="negbinom",
+    print.bar = T)
+cluster4.markers <- FindConservedMarkers(Nigra.integrated, ident.1 = 4, grouping.var = "sample", test.use="negbinom",
+    print.bar = T)
+cluster5.markers <- FindConservedMarkers(Nigra.integrated, ident.1 = 5, grouping.var = "batch", test.use="negbinom",
+    print.bar = T)
+cluster6.markers <- FindConservedMarkers(Nigra.integrated, ident.1 = 6, grouping.var = "sample", test.use="negbinom",
+    print.bar = T)
+#cluster7.markers <- FindConservedMarkers(Nigra.integrated, ident.1 = 7, test.use="negbinom",
+    #print.bar = T)
+cluster8.markers <- FindConservedMarkers(Nigra.integrated, ident.1 = 8, grouping.var = "sample", test.use="negbinom",
+    print.bar = T)
+
+```
+
+# Run DEG only on protein coding genes with FindAllMarkers
+```{r}
+library(dplyr)
+library(biomaRt)
+mart <- useMart(biomart = "ENSEMBL_MART_ENSEMBL", host = "www.ensembl.org", path="/biomart/martservice", dataset ="hsapiens_gene_ensembl")
+G_list_2 <- getBM( attributes= c("ensembl_gene_id","hgnc_symbol","gene_biotype") ,mart= mart)
+prot_coding_genes <- filter(G_list_2, gene_biotype %in% c("protein_coding"))
+Nigra_data <- as.matrix(Nigra.integrated@data)
+Nigra_data <- as.data.frame(Nigra_data)  
+Nigra_data$gene <- rownames(Nigra_data)
+ Nigra_data_pc <- Nigra_data %>% filter(Nigra_data$gene %in% prot_coding_genes$hgnc_symbol)
+#rownames(Cortex_Nigra_rawdata_pc) <- Cortex_Nigra_rawdata_pc$gene
+
+```
+
+
+```{r}
+Nigra_0.4_clustermarkers <-  FindAllMarkers(object = Nigra.integrated_v3, only.pos = F, min.pct = 0.25, thresh.use = 0.25, test.use="negbinom", logfc.threshold = 0.25)
+write.table(Nigra_0.4_clustermarkers, file="Nigra_0.4_DEG_clustermarkers.txt", sep="\t", quote=F)
+```
+
+
+# Use neuroexpresso to get cell type marker lists. Originally from mouse for different brain regions.
+
+```{r celltype_markers, fig.height=8, fig.width=15,}
+devtools::install_github('oganm/markerGeneProfile')
+library(markerGeneProfile)
+library(viridis)
+mouse_marker_genes <- data(mouseMarkerGenes)
+mouseHumanGeneTable_Nigra_astrocyte = mouseMarkerGenes$SubstantiaNigra$Astrocyte %>% homologene::mouse2human()
+mouseHumanGeneTable_Nigra_microglia = mouseMarkerGenes$SubstantiaNigra$Microglia %>% homologene::mouse2human()
+mouseHumanGeneTable_Nigra_oligo = mouseMarkerGenes$SubstantiaNigra$Oligo %>% homologene::mouse2human()
+mouseHumanGeneTable_Nigra_Dopaminergic = mouseMarkerGenes$SubstantiaNigra$Dopaminergic %>% homologene::mouse2human()
+mouseHumanGeneTable_Nigra_microglia_activation = mouseMarkerGenes$SubstantiaNigra$Microglia_activation %>% homologene::mouse2human()
+mouseHumanGeneTable_Nigra_microglia_deactivation = mouseMarkerGenes$SubstantiaNigra$Microglia_deactivation %>% homologene::mouse2human()
+
+
+all_genes <- as.character(rownames(Nigra.integrated@data))
+#mouseHumanGeneTable_Nigra_oligo_sub <- mouseHumanGeneTable_Nigra_oligo[mouseHumanGeneTable_Nigra_oligo %in% all_genes ]
+sample_Nigra.markers_astrocyte <- merge(sample_Nigra.markers, mouseHumanGeneTable_Nigra_astrocyte, by.x="gene", by.y="humanGene")
+
+sample_Nigra.markers_microglia <- merge(sample_Nigra.markers, mouseHumanGeneTable_Nigra_microglia, by.x="gene", by.y="humanGene")
+
+sample_Nigra.markers_oligo <- merge(sample_Nigra.markers, mouseHumanGeneTable_Nigra_oligo, by.x="gene", by.y="humanGene")
+
+#sample_5_c3.markers_endo <- merge(sample_5_c3.markers, mouseHumanGeneTable_Cortex_endothelial, by.x="gene", by.y="humanGene")
+
+sample_Nigra.markers_microglia_activation <- merge(sample_Nigra.markers, mouseHumanGeneTable_Nigra_microglia_activation, by.x="gene", by.y="humanGene")
+
+sample_Nigra.markers_microglia_deactivation <- merge(sample_Nigra.markers, mouseHumanGeneTable_Nigra_microglia_deactivation, by.x="gene", by.y="humanGene")
+
+sample_Nigra.markers_dopaminergic <- merge(sample_Nigra.markers, mouseHumanGeneTable_Nigra_Dopaminergic, by.x="gene", by.y="humanGene")
+
+```
+
+To identify cluster cell type identities, I took celltype markers from neuroexpression  and overlapped it with Cluster markers from the Find marker function
+For those genes that were signficant i created a mean geneset score for each cluster and then tried to assign cluster identity based on which cluster had the highest score for the particular geneset.
+
+#astrocyte cluster identification 
++ cluster 7 definetly  and 3 maybe
+
+```{r markerplots, fig.height=6, fig.width=10 }
+
+#Also, I don't know if averaging scaled values might be a better choice here compared to simply averaging #raw or normalised expression values. You can simply exchange object@data[gene.set, ] with #object@scale.data[gene.set, ] when computing colMeans().
+
+# Select genes of interest (using sample() here for demonstration purposes)
+#gene.set_astrocyte <- sample_Nigra.markers_astrocyte[ which(sample_Nigra.markers_astrocyte$avg_logFC > 0), ]
+gene.set_astrocyte <- unique(mouseHumanGeneTable_Nigra_astrocyte$humanGene)
+gene.set <- Reduce(intersect, list(all_genes,gene.set_astrocyte))
+
+Astrocyte_DEG <- Nigra_0.4_clustermarkers %>%
+  filter(gene %in% gene.set_astrocyte)
+Astrocyte_DEG_sig <- subset(Astrocyte_DEG, Astrocyte_DEG$p_val_adj <= 0.05, select=1:7)
+
+Astrocyte_DEG_sig <- as.character(unique(Astrocyte_DEG_sig$gene))
+  # Get mean expression of genes of interest per cell
+mean.exp <- colMeans(x = Nigra.integrated@scale.data[gene.set, ], na.rm = TRUE)
+#mean.exp <- colMeans(x = cluster.averages@scale.data[gene.set, ], na.rm = TRUE)
+# Add mean expression values in 'object@meta.data$gene.set.score'
+if (all(names(x = mean.exp) == rownames(x = Nigra.integrated@meta.data))) {
+  cat("Cell names order match in 'mean.exp' and 'object@meta.data':\n", 
+      "adding gene set mean expression values in 'object@meta.data$gene.set.score'")
+  Nigra.integrated@meta.data$gene.set.astrocyte.score <- mean.exp
+}
+
+#if (all(names(x = mean.exp) == rownames(x = cluster.averages@meta.data))) {
+  #cat("Cell names order match in 'mean.exp' and 'object@meta.data':\n", 
+     # "adding gene set mean expression values in 'object@meta.data$gene.set.score'")
+ # cluster.averages@meta.data$gene.set.astrocyte.score <- mean.exp
+#}
+
+library(RColorBrewer)
+col.pal = (brewer.pal(4, "Blues"))
+# Plot mean expression using Seurat::FeaturePlot() for all astrocyte genes thats are differentially expressed in clusters in the dataset
+FeaturePlot(object = Nigra.integrated, features.plot = "gene.set.astrocyte.score",cols.use = c("grey", "red"), reduction.use = "tsne")
+# plot dotplots for all sifgnificant DEG expressed astrocyte genes from neuroexpresso
+DotPlot(Nigra.integrated, genes.plot = Astrocyte_DEG_sig, cols.use = , plot.legend = T, x.lab.rot = T, scale.by = "size", col.max = 3, col.min=-3.0)
+```
+
+```{r,fig.height=12, fig.width=15,}
+# astrocyte cluster identification Zhang, 2016 paper
+VlnPlot(object = Nigra.integrated, features.plot = c("GFAP","ALDH1L1", "AQP4", "GJA1", "SOX9","CLU","SLC1A3","A2M"), nCol = 2, do.sort = T,do.return = T, x.lab.rot = T)
+VlnPlot(object = Nigra.integrated, features.plot = c("GFAP","ALDH1L1", "AQP4", "GJA1", "SOX9","CLU","SLC1A3","A2M"), nCol = 2, do.sort = T,do.return = T, group.by="sample", x.lab.rot = T)
+VlnPlot(object = Nigra.integrated, features.plot = c("GFAP","ALDH1L1", "AQP4", "GJA1", "SOX9","CLU","SLC1A3","A2M"), nCol = 2, do.sort = T,do.return = T, use.scaled=T, x.lab.rot = T)
+# you can plot raw UMI counts as well
+#VlnPlot(object = sample_N4_N4B, features.plot = c("GFAP","ALDH1L1", "AQP4", "GJA1", "SOX9","SLC1A3","A2M", "CLU"), use.raw = TRUE, y.log = TRUE, do.sort = T)
+
+#identify clusters based on marker lists from neuroexpresso
+#human_cortex_astrocyte <- as.vector(mouseHumanGeneTable_Cortex_astrocyte$humanGene)
+
+# check for astrocyte expression
+FeaturePlot(object = Nigra.integrated, features.plot =c ("GFAP","ALDH1L1", "AQP4", "GJA1", "SOX9","CLU","SLC1A3","A2M"), cols.use = c("grey", "red"), reduction.use = "tsne", nCol = 2)
+
+# by merging astorcyte marker list from neuroexpresso wit DEG list for each cluster
+VlnPlot(object = Nigra.integrated, features.plot = c("SLC14A1","PTPRZ1","FGFR3", "AQP4", "PRKD1", "SOX9","SLC1A3","CLU", "DTNA"), nCol = 2, do.sort = T,do.return = T,x.lab.rot = T)
+
+FeaturePlot(object = Nigra.integrated, features.plot =c ("SLC14A1","PTPRZ1","FGFR3", "AQP4", "PRKD1", "SOX9","SLC1A3","CLU", "DTNA"), cols.use = c("grey", "red"), reduction.use = "tsne")
+```
+
+# Microglia  cluster identification 
++ Cluster5
+
+```{r markerplots, fig.width=10}
+
+#### Option 1 ####
+# Create an empty list, and store VlnPlots in the list
+#plot.list <- list()
+#for (i in 1:length(genes.list)) {
+ # plot.list[[i]] <- VlnPlot(object = object, features.plot = genes.list[i], do.return = T)
+#}
+# Check elements of plot.list
+#plot.list
+
+#### Option 2 ####
+# Directly print output of VlnPlot
+#for (i in 1:length(genes.list)) {
+ # print(VlnPlot(object = object, features.plot = genes.list[i]))
+#}
+# Select genes of interest (using sample() here for demonstration purposes)
+#gene.set_microglia <- sample_Nigra.markers_microglia[ which(sample_Nigra.markers_microglia$avg_logFC > 0), ]
+gene.set_microglia <- unique(mouseHumanGeneTable_Nigra_microglia$humanGene)
+gene.set <- Reduce(intersect, list(all_genes,gene.set_microglia))
+
+Microglia_DEG <- Nigra_0.4_clustermarkers %>%
+  filter(gene %in% gene.set_microglia)
+Microglia_DEG_sig <- subset(Microglia_DEG, Microglia_DEG$p_val_adj <= 0.05, select=1:7)
+
+Microglia_DEG_sig <- as.character(unique(Microglia_DEG_sig$gene))
+
+# Get mean expression of genes of interest per cell
+mean.exp <- colMeans(x = Nigra.integrated@scale.data[gene.set, ], na.rm = TRUE)
+#mean.exp <- colMeans(x = cluster.averages@scale.data[gene.set, ], na.rm = TRUE)
+
+# Add mean expression values in 'object@meta.data$gene.set.score'
+if (all(names(x = mean.exp) == rownames(x = Nigra.integrated@meta.data))) {
+  cat("Cell names order match in 'mean.exp' and 'object@meta.data':\n", 
+      "adding gene set mean expression values in 'object@meta.data$gene.set.score'")
+  Nigra.integrated@meta.data$gene.set.microglia.score <- mean.exp
+}
+
+#if (all(names(x = mean.exp) == rownames(x = cluster.averages@meta.data))) {
+  #cat("Cell names order match in 'mean.exp' and 'object@meta.data':\n", 
+      #"adding gene set mean expression values in 'object@meta.data$gene.set.score'")
+  #cluster.averages@meta.data$gene.set.microglia.score <- mean.exp
+#}
+# Plot mean expression using Seurat::FeaturePlot() for all astrocyte genes thats are differentially expressed in clusters in the dataset
+FeaturePlot(object = Nigra.integrated, features.plot = "gene.set.microglia.score",cols.use = c("grey", "red"), reduction.use = "tsne")
+
+# plot dotplots for all sifgnificant DEG expressed microglia genes from neuroexpresso
+DotPlot(Nigra.integrated, genes.plot = Microglia_DEG_sig, cols.use = , plot.legend = T, x.lab.rot = T, scale.by = "size", col.max = 3, col.min=-3.0)
+```
+
+
+
+```{r,, fig.height=12, fig.width=15}
+# MICROLGIA/macrophage markers from Zhang 2016 paper and Galatro_2017 paper
+VlnPlot(object = Nigra.integrated, features.plot = c("ADGRG1", "CCL3", "TLR2", "CX3CR1", "IL1A","ITGAM","CSF1R", "P2RY12"), nCol = 2, do.sort = T)
+VlnPlot(object = Nigra.integrated, features.plot = c("ADGRG1", "CCL3", "TLR2", "CX3CR1", "IL1A","ITGAM","CSF1R", "P2RY12"), nCol = 2, do.sort = T, use.scaled=T)
+FeaturePlot(object = Nigra.integrated, features.plot =c ("ADGRG1", "CCL3", "TLR2", "CX3CR1", "IL1A","ITGAM","CSF1R", "P2RY12"), cols.use = c("grey", "red"), reduction.use = "tsne")
+
+# you can plot raw UMI counts as well
+#VlnPlot(object = sample_6_n3, features.plot = c("GFAP","ALDH1L1", "AQP4", "GJA1", "SOX9","SLC1A3","A2M"), use.raw = TRUE, y.log = TRUE, do.sort = T)
+
+# Microglia cores genes #cortex # Galatro et al 2017
+VlnPlot(object = Nigra.integrated, features.plot = c("FGD2", "ITGAL", "RHBDF2", "CSF3R","ITGAM","VAV1", "P2RY12", "BLNK"), nCol = 2, do.sort = T)
+VlnPlot(object = Nigra.integrated, features.plot = c("FGD2", "ITGAL", "RHBDF2", "CSF3R","ITGAM","VAV1", "P2RY12", "BLNK"), nCol = 2, do.sort = T, use.scaled=T)
+FeaturePlot(object = Nigra.integrated, features.plot =c ("FGD2", "ITGAL", "RHBDF2", "CSF3R","ITGAM","VAV1", "P2RY12", "BLNK"), cols.use = c("grey", "red"), reduction.use = "tsne")
+
+#identify clusters based on marker lists from  for SN microglia that are differentially expressed between clusters
+
+VlnPlot(object = Nigra.integrated, features.plot = c("SYK","CLEC7A", "SLC11A1","TBXAS1", "PALD1","CSF3R", "RHBDF2", "MEF2A" ), nCol = 2, do.sort = T)
+VlnPlot(object = Nigra.integrated, features.plot = c("SYK","CLEC7A", "SLC11A1","TBXAS1", "PALD1","CSF3R", "RHBDF2", "MEF2A"), nCol = 2, do.sort = T, use.scaled=T)
+FeaturePlot(object = Nigra.integrated, features.plot =c ("SYK","CLEC7A", "SLC11A1","TBXAS1", "PALD1","CSF3R", "RHBDF2", "MEF2A"), cols.use = c("grey", "red"), reduction.use = "tsne")
+
+```
+
+
+# Activated Microglia signal
+
+```{r markerplots, fig.width=10}
+
+#### Option 1 ####
+# Create an empty list, and store VlnPlots in the list
+#plot.list <- list()
+#for (i in 1:length(genes.list)) {
+ # plot.list[[i]] <- VlnPlot(object = object, features.plot = genes.list[i], do.return = T)
+#}
+# Check elements of plot.list
+#plot.list
+
+#### Option 2 ####
+# Directly print output of VlnPlot
+#for (i in 1:length(genes.list)) {
+ # print(VlnPlot(object = object, features.plot = genes.list[i]))
+#}
+# Select genes of interest (using sample() here for demonstration purposes)
+#gene.set_microglia <- sample_Nigra.markers_microglia[ which(sample_Nigra.markers_microglia$avg_logFC > 0), ]
+gene.set_microglia_activated <- unique(mouseHumanGeneTable_Nigra_microglia_activation$humanGene)
+gene.set <- Reduce(intersect, list(all_genes,gene.set_microglia))
+
+Microglia_activated_DEG <- Nigra_0.4_clustermarkers %>%
+  filter(gene %in% gene.set_microglia_activated)
+Microglia_activated_DEG_sig <- subset(Microglia_activated_DEG, Microglia_activated_DEG$p_val_adj <= 0.05, select=1:7)
+
+Microglia_activated_DEG_sig <- as.character(unique(Microglia_activated_DEG_sig$gene))
+
+# Get mean expression of genes of interest per cell
+mean.exp <- colMeans(x = Nigra.integrated@scale.data[gene.set, ], na.rm = TRUE)
+#mean.exp <- colMeans(x = cluster.averages@scale.data[gene.set, ], na.rm = TRUE)
+
+# Add mean expression values in 'object@meta.data$gene.set.score'
+if (all(names(x = mean.exp) == rownames(x = Nigra.integrated@meta.data))) {
+  cat("Cell names order match in 'mean.exp' and 'object@meta.data':\n", 
+      "adding gene set mean expression values in 'object@meta.data$gene.set.score'")
+  Nigra.integrated@meta.data$gene.set.microglia.activated.score <- mean.exp
+}
+
+#if (all(names(x = mean.exp) == rownames(x = cluster.averages@meta.data))) {
+ # cat("Cell names order match in 'mean.exp' and 'object@meta.data':\n", 
+     # "adding gene set mean expression values in 'object@meta.data$gene.set.score'")
+  #cluster.averages@meta.data$gene.set.microglia.activation.score <- mean.exp
+#}
+# Plot mean expression using Seurat::FeaturePlot() for all astrocyte genes thats are differentially expressed in clusters in the dataset
+FeaturePlot(object = Nigra.integrated, features.plot = "gene.set.microglia.activated.score",cols.use = c("grey", "red"), reduction.use = "tsne")
+
+# plot dotplots for all sifgnificant DEG expressed microglia genes from neuroexpresso
+DotPlot(Nigra.integrated, genes.plot = Microglia_activated_DEG_sig , plot.legend = T, x.lab.rot = T, scale.by = "size", col.max = 3, col.min=-3.0)
+```
+
+# De-Activated Microglia signal
+
+```{r markerplots, fig.width=10}
+
+gene.set_microglia_deactivated <- unique(mouseHumanGeneTable_Nigra_microglia_deactivation$humanGene)
+gene.set <- Reduce(intersect, list(all_genes,gene.set_microglia_deactivated))
+
+Microglia_deactivated_DEG <- Nigra_0.4_clustermarkers %>%
+  filter(gene %in% gene.set_microglia_deactivated)
+Microglia_deactivated_DEG_sig <- subset(Microglia_deactivated_DEG, Microglia_deactivated_DEG$p_val_adj <= 0.05, select=1:7)
+
+Microglia_deactivated_DEG_sig <- as.character(unique(Microglia_deactivated_DEG_sig$gene))
+
+# Get mean expression of genes of interest per cell
+mean.exp <- colMeans(x = Nigra.integrated@scale.data[gene.set, ], na.rm = TRUE)
+#mean.exp <- colMeans(x = cluster.averages@scale.data[gene.set, ], na.rm = TRUE)
+
+# Add mean expression values in 'object@meta.data$gene.set.score'
+if (all(names(x = mean.exp) == rownames(x = Nigra.integrated@meta.data))) {
+  cat("Cell names order match in 'mean.exp' and 'object@meta.data':\n", 
+      "adding gene set mean expression values in 'object@meta.data$gene.set.score'")
+  Nigra.integrated@meta.data$gene.set.microglia.deactivated.score <- mean.exp
+}
+
+#if (all(names(x = mean.exp) == rownames(x = cluster.averages@meta.data))) {
+  #cat("Cell names order match in 'mean.exp' and 'object@meta.data':\n", 
+#      "adding gene set mean expression values in 'object@meta.data$gene.set.score'")
+   #cluster.averages@meta.data$gene.set.microglia.deactivation.score <- mean.exp
+#}
+
+# Plot mean expression using Seurat::FeaturePlot() for all astrocyte genes thats are differentially expressed in clusters in the dataset
+FeaturePlot(object = Nigra.integrated, features.plot = "gene.set.microglia.deactivated.score",cols.use = c("grey", "red"), reduction.use = "tsne")
+
+# plot dotplots for all sifgnificant DEG expressed microglia genes from neuroexpresso
+DotPlot(Nigra.integrated, genes.plot = Microglia_deactivated_DEG_sig , plot.legend = T, x.lab.rot = T, scale.by = "size", col.max = 3, col.min=-3.0)
+```
+
+
+# oligo cluster identification in SN 
++ cluster 2,1,0
+
+```{r markerplots, fig.height=5, fig.width=6,}
+
+# Select genes of interest (using sample() here for demonstration purposes)
+#gene.set_oligo <- sample_Nigra.markers_oligo[ which(sample_Nigra.markers_oligo$avg_logFC > 0), ]
+gene.set_oligo <- unique(mouseHumanGeneTable_Nigra_oligo$humanGene)
+gene.set <- Reduce(intersect, list(all_genes,gene.set_oligo))
+
+# Get mean expression of genes of interest per cell
+mean.exp <- colMeans(x = Nigra.integrated@scale.data[gene.set, ], na.rm = TRUE)
+
+#mean.exp <- colMeans(x = cluster.averages@scale.data[gene.set, ], na.rm = TRUE)
+Oligo_DEG <- Nigra_0.4_clustermarkers %>%
+  filter(gene %in% gene.set_oligo)
+Oligo_DEG_sig <- subset(Oligo_DEG, Oligo_DEG$p_val_adj <= 0.05, select=1:7)
+
+Oligo_DEG_sig <- as.character(unique(Oligo_DEG_sig$gene))
+
+
+
+# Add mean expression values in 'object@meta.data$gene.set.score'
+if (all(names(x = mean.exp) == rownames(x = Nigra.integrated@meta.data))) {
+  cat("Cell names order match in 'mean.exp' and 'object@meta.data':\n", 
+      "adding gene set mean expression values in 'object@meta.data$gene.set.score'")
+  Nigra.integrated@meta.data$gene.set.oligo.score <- mean.exp
+}
+
+#if (all(names(x = mean.exp) == rownames(x = cluster.averages@meta.data))) {
+  #cat("Cell names order match in 'mean.exp' and 'object@meta.data':\n", 
+  #    "adding gene set mean expression values in 'object@meta.data$gene.set.score'")
+ # cluster.averages@meta.data$gene.set.oligo.score <- mean.exp
+#}
+
+
+# Plot mean expression using Seurat::FeaturePlot() for all astrocyte genes thats are differentially expressed in clusters in the dataset
+FeaturePlot(object = Nigra.integrated, features.plot = "gene.set.oligo.score",cols.use = c("grey", "red"), reduction.use = "tsne")
+
+# plot dotplots for all sifgnificant DEG expressed oligo genes from neuroexpresso
+DotPlot(Nigra.integrated, genes.plot = Oligo_DEG_sig , plot.legend = T, x.lab.rot = T, scale.by = "size", col.max = 3, col.min=-3.0)
+```
+
+
+```{r markerplots, fig.height=12, fig.width=15,}
+
+# OLIGOdendrocytes markers from Zhang 2016 paper
+
+VlnPlot(object = Nigra.integrated, features.plot = c("MOG", "MOBP", "SOX10", "PLP1", "GPR37"), use.scaled=TRUE, do.sort = T, same.y.lims = T, nCol=3)
+VlnPlot(object = Nigra.integrated, features.plot = c("MOG", "MOBP", "SOX10", "PLP1", "GPR37"), do.sort = T, same.y.lims = T, nCol=3)
+FeaturePlot(object = Nigra.integrated, features.plot =c ("MOG", "MOBP", "SOX10", "PLP1", "GPR37"), cols.use = c("grey", "red"), reduction.use = "tsne", nCol=3)
+
+# neruoexpresso SN oligo list
+VlnPlot(object = Nigra.integrated, features.plot = c("ANLN","ELL2","GAL3ST1","GAMT","GJB1","GRB14","HIST1H2BD","JOSD2","LIMS2","MOG","OLIG2","PLEKHH1","PPP1R14A","RAB33A","TRIM59","TSPAN2" ), nCol = 4,  use.scaled=TRUE, do.sort = T, same.y.lims = T)
+VlnPlot(object = Nigra.integrated, features.plot = c("ANLN","ELL2","GAL3ST1","GAMT","GJB1","GRB14","HIST1H2BD","JOSD2","LIMS2","MOG","OLIG2","PLEKHH1","PPP1R14A","RAB33A","TRIM59","TSPAN2"), nCol = 4, do.sort = T, same.y.lims = T)
+FeaturePlot(object = Nigra.integrated, features.plot =c ("ANLN","ELL2","GAL3ST1","GAMT","GJB1","GRB14","HIST1H2BD","JOSD2","LIMS2","MOG","OLIG2","PLEKHH1","PPP1R14A","RAB33A","TRIM59","TSPAN2"), cols.use = c("grey", "red"), reduction.use = "tsne", nCol = 4)
+
+
+
+```
+
+# endothelail  cluster identification 
++ cluster 8
+
+```{r markerplots, fig.height=5, fig.width=6,}
+
+# Select genes of interest (using sample() here for demonstration purposes)
+#gene.set_oligo <- sample_Nigra.markers_oligo[ which(sample_Nigra.markers_oligo$avg_logFC > 0), ]
+gene.set_endothelial <- as.character(c("APOLDI","EMCN","SDPR","PTPRB","CDH5","SLC38A5","TM4SF1","NOSTRIN","CYYR1","MECOM","MYCT1","CLDN5","ERG","ABCB1","ICAM2","FN1","ESAM"))
+gene.set <- Reduce(intersect, list(all_genes,gene.set_endothelial))
+
+# Get mean expression of genes of interest per cell
+mean.exp <- colMeans(x = Nigra.integrated@scale.data[gene.set, ], na.rm = TRUE)
+
+#mean.exp <- colMeans(x = cluster.averages@scale.data[gene.set, ], na.rm = TRUE)
+
+Endothelial_DEG <- Nigra_0.4_clustermarkers %>%
+  filter(gene %in% gene.set_endothelial)
+Endothelial_DEG_sig <- subset(Endothelial_DEG, Endothelial_DEG$p_val_adj <= 0.05, select=1:7)
+
+Endothelial_DEG_sig <- as.character(unique(Endothelial_DEG_sig$gene))
+
+
+# Add mean expression values in 'object@meta.data$gene.set.score'
+if (all(names(x = mean.exp) == rownames(x = Nigra.integrated@meta.data))) {
+  cat("Cell names order match in 'mean.exp' and 'object@meta.data':\n", 
+      "adding gene set mean expression values in 'object@meta.data$gene.set.score'")
+  Nigra.integrated@meta.data$gene.set.endothelial.score <- mean.exp
+}
+
+#if (all(names(x = mean.exp) == rownames(x = cluster.averages@meta.data))) {
+  #cat("Cell names order match in 'mean.exp' and 'object@meta.data':\n", 
+      #"adding gene set mean expression values in 'object@meta.data$gene.set.score'")
+  #cluster.averages@meta.data$gene.set.endothelial.score <- mean.exp
+#}
+
+
+# Plot mean expression using Seurat::FeaturePlot() for all astrocyte genes thats are differentially expressed in clusters in the dataset
+FeaturePlot(object = Nigra.integrated, features.plot = "gene.set.endothelial.score",cols.use = c("grey", "red"), reduction.use = "tsne")
+
+# plot dotplots for all sifgnificant DEG expressed endothelial genes from neuroexpresso
+DotPlot(Nigra.integrated, genes.plot = Endothelial_DEG_sig , plot.legend = T, x.lab.rot = T, scale.by = "size", col.max = 3, col.min=-3.0)
+```
+
+
+
+```{r markerplots, fig.height=12, fig.width=15,}
+# endothelial markers from Zhang 2016 paper
+VlnPlot(object = Nigra.integrated, features.plot = c("CLDN5","ESAM", "ICAM2","APOLD1","FLT1","RGS5","EMCN","SDPR","IFI27","MT2A"), nCol = 2,  use.scaled=TRUE, do.sort = T)
+VlnPlot(object = Nigra.integrated, features.plot = c("CLDN5","ESAM", "ICAM2","APOLD1","FLT1","RGS5","EMCN","IFI27","MT2A"), nCol = 2,  use.raw = TRUE, do.sort = T, y.log = TRUE)
+
+# by merging astorcyte marker list from neuroexpresso wit DEG list for each cluster
+FeaturePlot(object = Nigra.integrated, features.plot =c ("CLDN5","ESAM", "ICAM2","APOLD1", "FLT1","RGS5","EMCN","IFI27", "MT2A"), cols.use = c("grey", "red"), reduction.use = "tsne", nCol=2)
+```
+
+
+
+#Dopinamergic Neurons cluster in SN  
++ cluster 6
+
+```{r markerplots, fig.height=5, fig.width=11,}
+
+# Select genes of interest (using sample() here for demonstration purposes)
+#gene.set_dopinamergic <- sample_Nigra.markers_dopaminergic[ which(sample_Nigra.markers_dopaminergic$avg_logFC > 0), ]
+gene.set_dopinamergic <- unique(mouseHumanGeneTable_Nigra_Dopaminergic$humanGene)
+cynthia_DA <- as.character(c("SOX6", "SLC18A2","MSX1","TH","EN1","LMX1A","DRD2","NR4A2","KCNJ6","SLC6A3"))
+gene.set_dopinamergic <- c(gene.set_dopinamergic,cynthia_DA)
+gene.set <- Reduce(intersect, list(all_genes,gene.set_dopinamergic))
+
+Dopinamergic_DEG <- Nigra_0.4_clustermarkers %>%
+  filter(gene %in% gene.set_dopinamergic)
+Dopinamergic_DEG_sig <- subset(Dopinamergic_DEG, Dopinamergic_DEG$p_val_adj <= 0.05, select=1:7)
+
+Dopinamergic_DEG_sig <- as.character(unique(Dopinamergic_DEG_sig$gene))
+
+
+
+
+# Get mean expression of genes of interest per cell
+mean.exp <- colMeans(x = Nigra.integrated@scale.data[gene.set, ], na.rm = TRUE)
+
+#mean.exp <- colMeans(x = cluster.averages@scale.data[gene.set, ], na.rm = TRUE)
+
+
+# Add mean expression values in 'object@meta.data$gene.set.score'
+if (all(names(x = mean.exp) == rownames(x = Nigra.integrated@meta.data))) {
+  cat("Cell names order match in 'mean.exp' and 'object@meta.data':\n", 
+      "adding gene set mean expression values in 'object@meta.data$gene.set.score'")
+  Nigra.integrated@meta.data$gene.set.dopinamergic.score <- mean.exp
+}
+
+#if (all(names(x = mean.exp) == rownames(x = cluster.averages@meta.data))) {
+  #cat("Cell names order match in 'mean.exp' and 'object@meta.data':\n", 
+      #"adding gene set mean expression values in 'object@meta.data$gene.set.score'")
+ # cluster.averages@meta.data$gene.set.dopinamergic.score <- mean.exp
+#}
+# Plot mean expression using Seurat::FeaturePlot() for all astrocyte genes thats are differentially expressed in clusters in the dataset
+FeaturePlot(object = Nigra.integrated, features.plot = "gene.set.dopinamergic.score",cols.use = c("grey", "red"), reduction.use = "tsne")
+
+# plot dotplots for all sifgnificant DEG expressed Dopinamergic genes from neuroexpresso
+DotPlot(Nigra.integrated, genes.plot = Dopinamergic_DEG_sig , plot.legend = T, x.lab.rot = T, scale.by = "size", col.max = 3, col.min=-3.0)
+
+```
+
+
+```{r markerplots, fig.height=12, fig.width=15,}
+
+ 
+# DA markers from neuorexpresso that are differentially expressed between clusters when looked at all markers
+VlnPlot(object = Nigra.integrated, features.plot = c("ATP2B2","CD200","CELF4","CHGB","CLSTN2","CNTNAP2","ENO2","KLHL1","NAPB","HMP19","SCN1A","SLC4A10","SNCG","TENM1" ), nCol = 3, do.sort = T)
+#VlnPlot(object = sample_N4_N4B, features.plot = c(), nCol = 4, do.sort = T, use.raw=TRUE, y.log = T)
+VlnPlot(object = Nigra.integrated, features.plot = c("ATP2B2","CD200","CELF4","CHGB","CLSTN2","CNTNAP2","ENO2","KLHL1","NAPB","HMP19","SCN1A","SLC4A10","SNCG","TENM1"), nCol = 3, do.sort = T, use.scaled=T)
+FeaturePlot(object = Nigra.integrated, features.plot =c ("ATP2B2","CD200","CELF4","CHGB","CLSTN2","CNTNAP2","ENO2","KLHL1","NAPB","HMP19","SCN1A","SLC4A10","SNCG","TENM1"), cols.use = c("grey", "red"), reduction.use = "tsne", nCol = 3)
+
+# 16 Reference DA neuron markers from Cythias DA iPSC paper AND JIMENAS DAN SPECIFIC LIST
+VlnPlot(object = Nigra.integrated, features.plot = c("SOX6", "SLC18A2","MSX1","TH","EN1","LMX1A","DRD2","NR4A2","KCNJ6","SLC6A3","EN2","PITX3","FOXA1","LMX1B"), nCol = 4, do.sort = T)
+VlnPlot(object = Nigra.integrated, features.plot = c("SOX6", "SLC18A2","MSX1","TH","EN1","LMX1A","DRD2","NR4A2","KCNJ6","SLC6A3","EN2","PITX3","FOXA1","LMX1B"), nCol = 4, do.sort = T, use.raw=TRUE, y.log = T)
+VlnPlot(object = Nigra.integrated, features.plot = c("SOX6", "SLC18A2","MSX1","TH","EN1","LMX1A","DRD2","NR4A2","KCNJ6","SLC6A3","PITX3","EN2","FOXA1","LMX1B"), nCol = 4, do.sort = T, use.scaled=T)
+FeaturePlot(object = Nigra.integrated, features.plot =c ("SOX6", "SLC18A2","MSX1","TH","EN1","LMX1A","DRD2","NR4A2","KCNJ6","SLC6A3","PITX3","EN2","FOXA1","LMX1B"), cols.use = c("grey", "red"), reduction.use = "tsne", nCol=4)
+
+
+```
+
+# OPC geneset score 
++ cluster 4
+```{r markerplots, fig.height=5, fig.width=10,}
+
+# Select genes of interest (using sample() here for demonstration purposes)
+#gene.set_dopinamergic <- sample_Nigra.markers_dopaminergic[ which(sample_Nigra.markers_dopaminergic$avg_logFC > 0), ]
+gene.set_opc <- read.table("OPC_list.txt", sep="\t", header=F)
+gene.set_opc <- as.character(gene.set_opc$V1)
+gene.set <- Reduce(intersect, list(all_genes,gene.set_opc))
+
+
+OPC_DEG <- Nigra_0.4_clustermarkers %>%
+  filter(gene %in% gene.set_opc)
+OPC_DEG_sig <- subset(OPC_DEG, OPC_DEG$p_val_adj <= 0.05, select=1:7)
+
+OPC_DEG_sig <- as.character(unique(OPC_DEG_sig$gene))
+
+
+
+# Get mean expression of genes of interest per cell
+mean.exp <- colMeans(x = Nigra.integrated@scale.data[gene.set, ], na.rm = TRUE)
+
+#mean.exp <- colMeans(x = cluster.averages@scale.data[gene.set, ], na.rm = TRUE)
+
+
+# Add mean expression values in 'object@meta.data$gene.set.score'
+if (all(names(x = mean.exp) == rownames(x = Nigra.integrated@meta.data))) {
+  cat("Cell names order match in 'mean.exp' and 'object@meta.data':\n", 
+      "adding gene set mean expression values in 'object@meta.data$gene.set.score'")
+  Nigra.integrated@meta.data$gene.set.opc.score <- mean.exp
+}
+
+#if (all(names(x = mean.exp) == rownames(x = cluster.averages@meta.data))) {
+  cat("Cell names order match in 'mean.exp' and 'object@meta.data':\n", 
+      "adding gene set mean expression values in 'object@meta.data$gene.set.score'")
+  cluster.averages@meta.data$gene.set.opc.score <- mean.exp
+}
+
+# Plot mean expression using Seurat::FeaturePlot() for all astrocyte genes thats are differentially expressed in clusters in the dataset
+FeaturePlot(object = Nigra.integrated, features.plot = "gene.set.opc.score",cols.use = c("grey", "red"), reduction.use = "tsne")
+# plot dotplots for all sifgnificant DEG expressed OPC genes from Bin zhang paper
+DotPlot(Nigra.integrated, genes.plot = OPC_DEG_sig , plot.legend = T, x.lab.rot = T, scale.by = "size", col.max = 3, col.min=-3.0)
+
+```
+
+
+
+
+#OPC identifiication 
++ CLUSTER 4
+# markers from Bin Zhang 2018 paper on cell type identitites
+```{r markerplots, fig.height=12, fig.width=15,}
+#Human_Nigra_dopaminergic <- as.character(mouseHumanGeneTable_Nigra_Dopaminergic$humanGene)
+#Human_Nigra_dopaminergic_final<- Reduce(intersect, list(all_genes,Human_Nigra_dopaminergic))
+
+ 
+ #### Option 1 ####
+# Create an empty list, and store VlnPlots in the list
+#plot.list <- list()
+#for (i in 1:length(Human_Nigra_dopaminergic_final)) {
+  #plot.list[[i]] <- VlnPlot(object = sample_6_n3, features.plot = Human_Nigra_dopaminergic_final[i], do.return = T, do.sort=T)
+#}
+# Check elements of plot.list
+#plot.list
+
+#### Option 2 ####
+# Directly print output of VlnPlot
+#for (i in 1:length(genes.list)) {
+  #print(VlnPlot(object = object, features.plot = genes.list[i]))
+#}
+
+
+# OPC markers from Bin Zhang paper
+
+
+
+
+```
+
+# Neuron cell type markers Bin Zhang 2018 papers
+
+```{r}
+VlnPlot(object = Nigra.integrated, features.plot = c("PDGFRA","TNR","PCDH15","ATRNL1","VCAN","PHLDA1", "OLIG1","CA10","DSCAM"), nCol = 3, do.sort = T)
+#VlnPlot(object = sample_N4_N4B, features.plot = c(), nCol = 4, do.sort = T, use.raw=TRUE, y.log = T)
+VlnPlot(object = Nigra.integrated, features.plot = c("PDGFRA","TNR","PCDH15","ATRNL1","VCAN","PHLDA1", "OLIG1","CA10","DSCAM"), nCol = 3, do.sort = T, use.scaled=T)
+FeaturePlot(object = Nigra.integrated, features.plot =c ("PDGFRA","TNR","PCDH15","ATRNL1","VCAN","PHLDA1", "OLIG1","CA10","DSCAM"), cols.use = c("grey", "red"), reduction.use = "tsne", nCol = 3)
+```
+
+```{r markerplots, fig.height=12, fig.width=15,}
+#Human_Nigra_dopaminergic <- as.character(mouseHumanGeneTable_Nigra_Dopaminergic$humanGene)
+#Human_Nigra_dopaminergic_final<- Reduce(intersect, list(all_genes,Human_Nigra_dopaminergic))
+
+ 
+ #### Option 1 ####
+# Create an empty list, and store VlnPlots in the list
+#plot.list <- list()
+#for (i in 1:length(Human_Nigra_dopaminergic_final)) {
+  #plot.list[[i]] <- VlnPlot(object = sample_6_n3, features.plot = Human_Nigra_dopaminergic_final[i], do.return = T, do.sort=T)
+#}
+# Check elements of plot.list
+#plot.list
+
+#### Option 2 ####
+# Directly print output of VlnPlot
+#for (i in 1:length(genes.list)) {
+  #print(VlnPlot(object = object, features.plot = genes.list[i]))
+#}
+
+
+# Neuron markers from Bin Zhang paper
+VlnPlot(object = Nigra.integrated, features.plot = c("RELN","KCNC2", "GAD2", "SYNPR", "GAD1", "CNR1", "SYT1", "SCG2", "TAC3", "GABRG2", "GABRA1","STMN2"), nCol = 3, do.sort = T)
+#VlnPlot(object = sample_N4_N4B, features.plot = c(), nCol = 4, do.sort = T, use.raw=TRUE, y.log = T)
+VlnPlot(object = Nigra.integrated, features.plot = c("RELN","KCNC2", "GAD2", "SYNPR", "GAD1", "CNR1", "SYT1", "SCG2", "TAC3", "GABRG2", "GABRA1","STMN2"), nCol = 3, do.sort = T, use.scaled=T)
+FeaturePlot(object = Nigra.integrated, features.plot =c ("RELN","KCNC2", "GAD2", "SYNPR", "GAD1", "CNR1", "SYT1", "SCG2", "TAC3", "GABRG2", "GABRA1","STMN2"), cols.use = c("grey", "red"), reduction.use = "tsne", nCol = 3)
+
+
+
+```
+
+#Adult mouse DaN subtype markers for mature or P90 stage (based on this paper DOI: 10.1038/s41467-019-08453-1)
+in the end it wasnt similar to this so not needed.
+```{r markerplots, fig.height=12, fig.width=15}
+# DaN P90 or maturation markers (Fig 1D)
+# FeaturePlot(object = Nigra.integrated, features.plot = c("IMPACT","NRSN2", "ENO2", "FAIM2", "TUBA4A","TH","SLC6A3","NXPH4","ALDH1A1","VIP","GAD2"), nCol = 3, reduction.use = "tsne",cols.use = c("grey", "red"))
+#VlnPlot(object = Nigra.integrated, features.plot = c("IMPACT","NRSN2", "ENO2", "FAIM2", "TUBA4A","TH","SLC6A3","NXPH4","ALDH1A1","VIP","GAD2"), nCol = 3, do.sort = T, use.scaled=T,x.lab.rot=T )
+
+# AT_DAT
+#FeaturePlot(object = Nigra.integrated, features.plot = c("SLC18A2","DDC","ALDH1A1","SNCG","LPL","NRP1","OTX2"), nCol = 3, reduction.use = "tsne",cols.use = c("grey", "red"))
+
+# T_DAT
+# FeaturePlot(object = Nigra.integrated, features.plot = c("NPW","VWC2L"), nCol = 3, reduction.use = "tsne",cols.use = c("grey", "red"))
+
+ # VT_DAT
+#VT_DAT <- FeaturePlot(object = Nigra.integrated, features.plot = c("ZFHX3","POU2F2","ID4","GIPR","ZNF804A"), nCol = 3, reduction.use = "tsne",cols.use = c("grey", "red"))
+
+# N_DAT
+#FeaturePlot(object = Nigra.integrated, features.plot = c("C1QL1","FAM19A2","CA10"), nCol = 3,reduction.use = "tsne",cols.use = c("grey", "red"))
+
+# G_Dat
+#FeaturePlot(object = Nigra.integrated, features.plot = c("C1QL1","FAM19A2","CA10"), nCol = 3,reduction.use = "tsne",cols.use = c("grey", "red"))
+
+
+```
+
+# DaN neurons clustering based on DAT (SLC6A3,TH,ALDH1A1,GAD2,NXPH4,VIP)
+
+```{r markerplots, fig.height=6, fig.width=8 }
+#FeaturePlot(object = Nigra.integrated, features.plot = c("TH","SLC6A3","NXPH4","ALDH1A1","VIP","GAD2"), nCol = 2, reduction.use = "tsne",cols.use = c("grey", "red"))
+#FeaturePlot(object = Nigra.integrated, features.plot = c("SLC6A3"), reduction.use = "tsne",cols.use = c("grey", "red"))
+```
+
+
+
+# manually identify DaN subtypes AT-DAT high (SLC6A3 +, TH+, ALDH1A1+) and GT-Dat low(SLC6A3-, GAD2+,TH+)
+
+```{r}
+#WhichCells(object = Nigra.integrated, ident = "DaNeurons" ,expression = SLC6A3 > 3 & ALDH1A1 > 3 & TH > 3)
+# read in DaN subtypes vector Id and manually assign the IDs
+#DaN_id <- read.table(file="DaN_subtypes_cellid.txt", sep="\t", header=T)
+#D1 <- data.frame(DaN_id$DaNeurons_AT_DAT_high)
+#D2 <- D1 %>% drop_na()
+#DaN_DAT_H <- as.vector(D2$DaN_id.DaNeurons_AT_DAT_high)
+
+
+#Nigra.integrated <- SetIdent(object = Nigra.integrated, cells.use = DaN_DAT_H, ident.use = "DaNs")
+
+#DaN_DAT_L <- as.vector(DaN_id$DaNeurons_GT_DAT_low)
+
+#Nigra.integrated <- SetIdent(object = Nigra.integrated, cells.use = DaN_DAT_L, ident.use = "GABAergic")
+#Nigra.integrated <- StashIdent(object = Nigra.integrated, save.name = "ClusterNames_0.4_level2_new")
+```
+
+
+
+
+# Identify  cell type markers between the two astrocyte populations
+
+```{r}
+cluster_Asro1_vs_Astro2.markers <- FindMarkers(Nigra.integrated, ident.1 = "Astrocytes-1", ident.2 = "Astrocytes-2", test.use="negbinom",
+    print.bar = T,logfc.threshold = 0.25, min.diff.pct = 0.25, only.pos = T)
+cluster_Asro2_vs_Astro1.markers <- FindMarkers(Nigra.integrated, ident.1 = "Astrocytes-2", ident.2 = "Astrocytes-1", test.use="negbinom",
+    print.bar = T,logfc.threshold = 0.25, min.diff.pct = 0.25, only.pos = T)
+
+```
+# plot Astrocyte 1 vs Astrocyte 2 markers
+```{r, fig.width=20, fig.height=10}
+
+#VlnPlot(object = sample_N4_N4B, features.plot = c(), nCol = 4, do.sort = T, use.raw=TRUE, y.log = T)
+VlnPlot(object = Nigra.integrated, features.plot = c("OLR1","MCF2L2","CD74","HSPA1A","TMSB4X","MEF2C","FRMD4A","GFAP","AQP4","TNC","MT1M"), nCol = 4, do.sort = T, use.scaled=T, point.size.use = 0.2, x.lab.rot = T)
+FeaturePlot(object = Nigra.integrated, features.plot =c ("OLR1","MCF2L2","CD74","HSPA1A","TMSB4X","MEF2C","FRMD4A"), cols.use = c("grey", "red"), reduction.use = "tsne", nCol = 3)
+```
+
+
+
+
+
+# Assiging cell types IDS and then decreasing resolution to see if that merges some clusters
+### Assigning cell type identity to clusters
+
+Fortunately in the case of this dataset, we can use canonical markers to easily match the unbiased clustering to known cell types:
+
+Cluster ID | Markers                                     | Cell Type
+-----------|-----------------------------                |----------
+0          |  MOG,MOBP,PLP1, SGCZ,ADAMTS18              | ODC-1
+1          |  MOG,MOBP,PLP1,LGALS1,TUBB2B               | ODC-2
+2          |  MOG,MOBP,PLP1, STMN4,PPM1G                | ODC-3
+3          |          OLR1,MCF2L2, AQP4,SLC14A,GFAP     | Astrocytes
+4          |TNR,DSCAM,VCAN,PCDH15                       | OPC
+5          |    CSF3R,CSF1R,SYK,SLC11A1,RHBDF2          |Microglia
+6          |              TH,LMX1A,KCNJ6,CLSTN2               | DaN
+7          |  AQP4,SLC14A,GFAP, GINS3, TMEM241          | Astrocytes
+8          |      RGS5                         | endothelial
+
+# Only assign DaNS and GABA clusters manually using the original identities
+```{r}
+DaN_id <- read.table(file="DaN_subtypes_cellid.txt", sep="\t", header=T)
+D1 <- data.frame(DaN_id$DaNs)
+D2 <- D1 %>% drop_na()
+DaNs <- as.vector(D2$DaN_id.DaNs)
+
+```
+
+
+# Level 2 cell type markers
+
+```{r}
+# Identify cell type specific markers between level 2 subtypes
+#Nigra_0.4_clustermarkers_1 <- unique(Nigra_0.4_clustermarkers$gene)
+DaN1_markers <- FindMarkers(Nigra.integrated, ident.1 = "DaN_1", ident.2 = "DaN_2",only.pos = T, min.pct = 0.25, thresh.use = 0.25, test.use="negbinom", logfc.threshold = 0.1, max.cells.per.ident = 72)
+DaN2_markers <- FindMarkers(Nigra.integrated, ident.1 = "DaN_2", ident.2 = "DaN_1",only.pos = T, min.pct = 0.25, thresh.use = 0.25, test.use="negbinom", logfc.threshold = 0.1,max.cells.per.ident = 72)
+
+```
+
+# ODC subtype MARKERS
+```{r}
+ODC1_vsODC23 <- FindMarkers(Nigra.integrated, ident.1= "ODC-1", ident.2=c("ODC-2","ODC-3"),test.use="negbinom",min.pct=0.10, min.diff.pct = -Inf, logfc.threshold =-Inf) ODC2_vsODC13 <- FindMarkers(Nigra.integrated, ident.1= "ODC-2", ident.2=c("ODC-1","ODC-3"),test.use="negbinom",min.pct=0.10, min.diff.pct = -Inf, logfc.threshold =-Inf)
+
+ ODC3_vsODC12 <- FindMarkers(Nigra.integrated, ident.1= "ODC-3", ident.2=c("ODC-1","ODC-2"),test.use="negbinom",min.pct=0.10, min.diff.pct = -Inf, logfc.threshold =-Inf)
+
+```
+
+
+
+```{r labelplot, fig.height=8, fig.width=20, warning = FALSE}
+#current.cluster.ids <- c(0, 1, 2, 3, 4, 5, 6,7,8)
+#new.cluster.ids <- c("ODC-1", "ODC-2", "ODC-3", "Astrocytes-1", "OPC", "Microglia", "DaNeurons","Astrocytes-2","Endothelial")
+#current.cluster.ids <- c("ODC-1", "ODC-2", "ODC-3", "Astrocytes-1", "OPC", "Microglia", "DaNeurons","Astrocytes-2","Endothelial")
+#new.cluster.ids <- c(0, 1, 2, 3, 4, 5, 6,7,8)
+
+#current.cluster.ids <- c("ODC-1", "ODC-2", "ODC-3", "Astrocytes-1", "OPC", "Microglia", "DaNeurons","Astrocytes-2","Endothelial")
+#new.cluster.ids <- c("ODC", "ODC", "ODC", "Astrocytes", "OPC", "Microglia", "DaNeurons","Astrocytes","Endothelial")
+
+#Nigra.integrated@ident <- plyr::mapvalues(x = Nigra.integrated@ident, from = current.cluster.ids, to = new.cluster.ids)
+#Nigra.integrated <- StashIdent(object = Nigra.integrated, save.name = "ClusterNames_0.4")
+#Nigra.integrated <- StashIdent(object = Nigra.integrated, save.name = "ClusterNames_0.4_level1")
+#metadata_nigra.integrated <- Nigra.integrated@meta.data
+#write.table(metadata_nigra.integrated, file="Metadata_seurat_nigra_integrated.txt", sep="\t", quote=F)
+#p1 <-TSNEPlot(object = sample_Nigra, do.label = TRUE, pt.size = 2.0,do.return=T)
+#p2 <-TSNEPlot(object = sample_Nigra, do.label = TRUE, pt.size = 2.0, do.return=T, group.by="res.0.6")
+#p3 <- TSNEPlot(object = sample_Nigra, pt.size = 2.0, do.return=T, group.by="samples")
+#p4 <-TSNEPlot(object = sample_Nigra, do.label = TRUE, pt.size = 2.0, do.return=T, group.by="res.0.6",pt.shape="samples")
+#plot_grid(p1,p2)
+#plot_grid(p2,p3)
+#plot_grid(p1,p3)
+#plot_grid(p1,p4)
+
+```
+
+
+
+
+# TSNE plot grouped by varaious metadata factors
+
+```{r, fig.width=3.5, fig.height=2.7}
+#col.pal <- RColorBrewer::brewer.pal(11,name= "BuGn")
+#qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+#tiff(filename = "C:/Users/dagarwal/Documents/10x_scN_tara_human/Samples_merged/Nigra_merged_CCA/SN_celltypes.tiff", width = 300, height = 200,res = 300)
+library(RColorBrewer)
+# Calculate number of cells per cluster from object@ident
+cell.num <- table(Nigra.integrated_v3@meta.data$level1_class_alt)
+
+# Add cell number per cluster to cluster labels
+ClusterLabels = paste(names(cell.num), paste0("(n = ", cell.num, ")"))
+
+# Order legend labels in plot in the same order as 'ClusterLabels'
+tiff(filename = "/Volumes/Seagate Backup Plus Drive/Oxford_postdoc/10x_scN_tara_human/Samples_merged/Nigra_merged_CCA/SN_celltypes_L1.tiff", width = 9, height = 5, units="cm",res = 300)
+ClusterBreaks = names(cell.num)
+colourCount = length(unique(cell.num))
+getPalette = colorRampPalette(brewer.pal(11, "Set1"))
+# Plot tSNE with new legend labels for clusters
+SN_tsne <- TSNEPlot(object = Nigra.integrated_v3, do.return = T,  pt.size =0.1, do.label = F, label.size = 5, no.legend=T, group.by="level1_class_alt") 
+SN_tsne <- SN_tsne +  scale_colour_manual(breaks = ClusterBreaks, 
+                       labels = ClusterLabels, values = c("Microglia" = "#ff8858", "DaNs" = "#ED6141","Astrocytes-1"="#00B92A","ODC"="#00B0F6","OPC"="#E76BF3","Endothelial"="#800080","GABA"="#f2bf00","Astrocytes-2"="#CCCC00"))
+SN_tsne <- SN_tsne +ggtitle("Substantia nigra(n=5,943)") + theme(plot.title = element_text(hjust = 0.5, size=5))
+SN_tsne <- SN_tsne + theme(legend.text=element_text(size=4)) + theme(legend.key.size = unit(0.5, 'lines')) + theme(legend.margin=margin(0,0,0,0),
+        legend.box.spacing = unit(0.1,'cm'),legend.spacing.x  = unit(0.05,'cm'))
+SN_tsne <- SN_tsne +  theme(axis.line=element_blank(),axis.text.x=(element_blank()), axis.text.y=element_blank(),axis.ticks=element_blank(),
+      axis.title.x=element_blank(),axis.title.y=element_blank(),panel.background=element_blank())
+SN_tsne
+
+# Calculate number of cells per cluster from object@ident
+cell.num <- table(Nigra.integrated_v3@meta.data$ClusterNames_0.4_level2_new)
+
+# Add cell number per cluster to cluster labels
+ClusterLabels = paste(names(cell.num), paste0("(n =", cell.num, ")"))
+
+# Order legend labels in plot in the same order as 'ClusterLabels'
+#tiff(filename = "C:/Users/dagarwal/Documents/10x_scN_tara_human/Samples_merged/Nigra_merged_CCA/SN_celltypes_l2.tiff", width = 8, height = 6,res = 300, unit="in")
+ClusterBreaks = names(cell.num)
+colourCount = length(unique(cell.num))
+#getPalette = colorRampPalette(brewer.pal(11, "Set1"))
+# Plot tSNE with new legend labels for clusters
+SN_tsne <- DimPlot(object = Nigra.integrated_v3,  pt.size = 0.8, label = T, label.size = 2, group.by="ClusterNames_0.4_level2_new", reduction = "tsne") 
+SN_tsne <- SN_tsne +  scale_colour_manual(breaks = ClusterBreaks, 
+                       labels = ClusterLabels, values = c("Microglia" = "#7997FF", "DaNs" = "#FF3300","Astrocytes-1"="#00B92A","ODC-1"="#00BFC4","OPC"="#A3A500","Endothelial"="#800080","Astrocytes-2"="#FA62DB","ODC-2"="#D89000","ODC-3"="#FF6A98","GABA"="#f2bf00" )) 
+SN_tsne <- SN_tsne +ggtitle("Substantia nigra(n=5,943)") + theme(plot.title = element_text(hjust = 0.5, size=6)) +theme(legend.margin=margin(0,0,0,0),
+        legend.box.spacing = unit(0.1,'cm'),legend.spacing.x  = unit(0.05,'cm'))
+#p1 <- p1+ labs(x = "t-SNE 1",
+     #  y = "t-SNE 2")
+#p1 <- p1 +  theme(legend.text=element_text(size=16))
+SN_tsne <- SN_tsne + guides(color = guide_legend(override.aes = list(size=4), nrow = 2)) +theme(legend.position="bottom")+theme(legend.key.size = unit(0.5, 'lines'))
+SN_tsne <- SN_tsne + theme(legend.text=element_text(size=4))
+SN_tsne <- SN_tsne  + NoAxes()
+SN_tsne
+
+library(RColorBrewer)
+cell.num <- table(Nigra.integrated@meta.data$sample)
+
+# Add cell number per cluster to cluster labels
+ClusterLabels = paste("Sample",names(cell.num), paste0("(n = ", cell.num, ")"))
+
+# Order legend labels in plot in the same order as 'ClusterLabels'
+ClusterBreaks = names(cell.num)
+colourCount = length(unique(cell.num))
+getPalette = colorRampPalette(brewer.pal(11, "Set1"))
+# Plot tSNE with new legend labels for clusters
+SN_sample <- TSNEPlot(object = Nigra.integrated, do.return = T,  pt.size =0.8, do.label = F, no.legend=F, no.axes=T, group.by="sample") 
+SN_sample <- SN_sample +  scale_colour_manual(breaks = ClusterBreaks, 
+                        labels = ClusterLabels, values=getPalette(colourCount)) 
+#p2 <- p2+ labs(x = "t-SNE 1",
+       #y = "t-SNE 2")
+SN_sample <- SN_sample +ggtitle("Sample") + theme(plot.title = element_text(hjust = 0.5, size=6, face="bold"))
+SN_sample <- SN_sample + guides(color = guide_legend(override.aes = list(size=4), nrow = 2))
+SN_sample <- SN_sample + theme(legend.text=element_text(size=4))
+SN_sample <- SN_sample + theme(legend.position="bottom")
+SN_sample
+
+
+# Calculate number of cells per cluster from object@ident
+cell.num <- table(Nigra.integrated@meta.data$batch)
+
+# Add cell number per cluster to cluster labels
+ClusterLabels = paste(names(cell.num), paste0("(n = ", cell.num, ")"))
+
+# Order legend labels in plot in the same order as 'ClusterLabels'
+ClusterBreaks = names(cell.num)
+colourCount = length(unique(cell.num))
+getPalette = colorRampPalette(brewer.pal(11, "Set1"))
+# Plot tSNE with new legend labels for clusters
+SN_batch <- TSNEPlot(object = Nigra.integrated, do.return = T,  pt.size = 0.8, group.by="batch", no.legend=F,no.axes=T, do.label = F) 
+SN_batch <- SN_batch +  scale_colour_manual(breaks = ClusterBreaks, 
+                        labels = ClusterLabels, values=getPalette(colourCount)) 
+#SN_batch <- SN_batch + labs(x = "t-SNE 1",y = "t-SNE 2")
+SN_batch <- SN_batch + ggtitle("Batch") + theme(plot.title = element_text(hjust = 0.5, size=6, face="bold"))
+SN_batch <- SN_batch + guides(color = guide_legend(override.aes = list(size=4)))
+SN_batch <- SN_batch + theme(legend.text=element_text(size=5))
+SN_batch <- SN_batch + theme(legend.position="bottom")
+SN_batch
+
+# Calculate number of cells per cluster from object@ident
+cell.num <- table(Nigra.integrated@meta.data$Phase)
+
+# Add cell number per cluster to cluster labels
+ClusterLabels = paste( "Phase",names(cell.num), paste0("(n = ", cell.num, ")"))
+
+# Order legend labels in plot in the same order as 'ClusterLabels'
+ClusterBreaks = names(cell.num)
+colourCount = length(unique(cell.num))
+getPalette = colorRampPalette(brewer.pal(11, "Set1"))
+# Plot tSNE with new legend labels for clusters
+SN_phase <- TSNEPlot(object = Nigra.integrated, do.return = T,  pt.size = 0.8, group.by="Phase", no.legend=F, no.axes=T, do.label=F) 
+SN_phase <- SN_phase +  scale_colour_manual(breaks = ClusterBreaks, 
+                        labels = ClusterLabels, values=getPalette(colourCount)) 
+#p4 <- p4 + labs(x = "t-SNE 1",
+ #      y = "t-SNE 2")
+SN_phase <- SN_phase +ggtitle("Cell cycle phase") + theme(plot.title = element_text(hjust = 0.5, size=6, face="bold"))
+SN_phase <- SN_phase + theme(legend.text=element_text(size=5))
+SN_phase <- SN_phase + theme(legend.position="bottom")
+SN_phase <- SN_phase + guides(color = guide_legend(override.aes = list(size=4)))  
+SN_phase
+
+
+
+#table(sample_Nigra@ident, sample_Nigra@meta.data$samples)
+#sample_Nigra@meta.data$nUMIcat <-cut(sample_Nigra@meta.data$nUMI, breaks= c(0,4000,8000,12000,16000,20000,24000,28000,32000,Inf), labels=c( "2k","4k","8k","12k","16k","20k","24k","28k","32k"),right=FALSE)
+
+#colourCount=11
+#getPalette = colorRampPalette(brewer.pal(11, "BuGn"))
+
+SN_umi <- ggplot(nigra.integrated_tSNE, aes(x= tSNE_1, y=tSNE_2))  
+SN_umi <- SN_umi +geom_point(size=0.8, aes(colour=nUMI)) 
+SN_umi <- SN_umi +theme_bw(base_size=5)
+SN_umi <- SN_umi +  scale_color_gradientn(colors = brewer.pal(6,"Reds"),limits=c(500,32500), guide = "colourbar") 
+SN_umi <- SN_umi +ggtitle("UMI depth") + theme(plot.title = element_text(hjust = 0.5, size=6, face="bold"))
+SN_umi <- SN_umi + theme(axis.line=element_blank(),axis.text.x=element_blank(), axis.text.y=element_blank(),axis.ticks=element_blank(),
+      axis.title.x=element_blank(),axis.title.y=element_blank(),panel.background=element_blank(),
+      panel.border=element_blank(),
+      panel.grid.major=element_blank(),
+      panel.grid.minor=element_blank(),
+      plot.background=element_blank())
+SN_umi <- SN_umi + theme(legend.text=element_text(size=5))
+SN_umi <- SN_umi + guides(color = guide_legend(override.aes = list(size=4)))                                 
+SN_umi <- SN_umi + theme(legend.position="bottom")
+SN_umi
+
+
+SN_gene <- ggplot(nigra.integrated_tSNE, aes(x= tSNE_1, y=tSNE_2))  
+SN_gene <- SN_gene +geom_point(size=0.8, aes(colour=nGene)) 
+SN_gene <- SN_gene +theme_bw(base_size=5)
+SN_gene <- SN_gene +  scale_color_gradientn(colors = brewer.pal(6,"Reds"),limits=c(500,8500), guide = "colourbar") 
+SN_gene <- SN_gene +ggtitle("No of genes") + theme(plot.title = element_text(hjust = 0.5, size=6, face="bold"))
+SN_gene <- SN_gene + theme(axis.line=element_blank(),axis.text.x=element_blank(), axis.text.y=element_blank(),axis.ticks=element_blank(),
+      axis.title.x=element_blank(),axis.title.y=element_blank(),panel.background=element_blank(),
+      panel.border=element_blank(),
+      panel.grid.major=element_blank(),
+      panel.grid.minor=element_blank(),
+      plot.background=element_blank())
+SN_gene <- SN_gene + theme(legend.text=element_text(size=4))
+SN_gene <- SN_gene + guides(color = guide_legend(override.aes = list(size=4)))                                 
+SN_gene <- SN_gene + theme(legend.position="bottom")
+SN_gene
+#show_col(hue_pal()(12))
+```
+
+```{r, fig.width=7, fig.height=8}
+tiff(filename = "F:/Oxford_postdoc/10x_scN_tara_human/Samples_merged/Nigra_merged_CCA/SN_metrics_l2.tiff", width = 17.8, height = 18,res = 300, unit="cm")
+plot_grid(SN_tsne,SN_batch,SN_sample,SN_phase, SN_umi,SN_gene, label_size = 8, labels= "auto",align = "hv", ncol = 2, axis = "tb")
+
+```
+
+# Run UMAP on same dimensions as tsne for cca.aligned
+
+```{r}
+Nigra.integrated <- RunUMAP(Nigra.integrated,
+                               reduction.use = "cca.aligned",
+                               dims.use = 1:25)
+```
+
+# UMAP plot with cell counts for each sample in a cluster
+```{r, fig.width=12, fig.height=6}
+#col.pal <- RColorBrewer::brewer.pal(11,name= "BuGn")
+#qual_col_pals = brewer.pal.info[brewer.pal.info$category == 'qual',]
+
+
+# Calculate number of cells per cluster from object@ident
+cell.num <- table(Nigra.integrated@meta.data$ClusterNames_0.4)
+
+# Add cell number per cluster to cluster labels
+ClusterLabels = paste("Cluster",names(cell.num), paste0("(n = ", cell.num, ")"))
+
+# Order legend labels in plot in the same order as 'ClusterLabels'
+ClusterBreaks = names(cell.num)
+colourCount = length(unique(cell.num))
+getPalette = colorRampPalette(brewer.pal(11, "Set1"))
+# Plot tSNE with new legend labels for clusters
+p1 <- DimPlot(object = Nigra.integrated, do.return = T,  pt.size = 1.2, do.label = T, reduction.use ="umap") 
+p1 <- p1 +  scale_colour_manual(breaks = ClusterBreaks, 
+                        labels = ClusterLabels, values=getPalette(colourCount)) 
+p1 <- p1+ labs(x = "UMAP1",
+       y = "UMAP2")
+p1 <- p1 +  theme(legend.text=element_text(size=16))
+p1
+
+
+cell.num <- table(Nigra.integrated@meta.data$sample)
+
+# Add cell number per cluster to cluster labels
+ClusterLabels = paste("Sample",names(cell.num), paste0("(n = ", cell.num, ")"))
+
+# Order legend labels in plot in the same order as 'ClusterLabels'
+ClusterBreaks = names(cell.num)
+colourCount = length(unique(cell.num))
+getPalette = colorRampPalette(brewer.pal(11, "Set1"))
+# Plot tSNE with new legend labels for clusters
+p2 <- DimPlot(object = Nigra.integrated, do.return = T,  pt.size = 1.2, group.by="sample", reduction.use="umap") 
+p2 <- p2 +  scale_colour_manual(breaks = ClusterBreaks, 
+                        labels = ClusterLabels, values=getPalette(colourCount)) 
+p2 <- p2+ labs(x = "UMAP1",
+       y = "UMAP2")
+p2 <- p2 + theme(legend.text=element_text(size=16))
+p2
+
+
+# Calculate number of cells per cluster from object@ident
+cell.num <- table(Nigra.integrated@meta.data$batch)
+
+# Add cell number per cluster to cluster labels
+ClusterLabels = paste(names(cell.num), paste0("(n = ", cell.num, ")"))
+
+# Order legend labels in plot in the same order as 'ClusterLabels'
+ClusterBreaks = names(cell.num)
+colourCount = length(unique(cell.num))
+getPalette = colorRampPalette(brewer.pal(11, "Set1"))
+# Plot tSNE with new legend labels for clusters
+p3 <- DimPlot(object = Nigra.integrated, do.return = T,  pt.size = 1.2, group.by="batch", reduction.use = "umap") 
+p3 <- p3 +  scale_colour_manual(breaks = ClusterBreaks, 
+                        labels = ClusterLabels, values=getPalette(colourCount)) 
+p3 <- p3+ labs(x = "UMAP1",
+       y = "UMAP2")
+p3 <- p3 +  theme(legend.text=element_text(size=16))
+p3
+
+# Calculate number of cells per cluster from object@ident
+cell.num <- table(Nigra.integrated@meta.data$Phase)
+
+# Add cell number per cluster to cluster labels
+ClusterLabels = paste( "Phase",names(cell.num), paste0("(n = ", cell.num, ")"))
+
+# Order legend labels in plot in the same order as 'ClusterLabels'
+ClusterBreaks = names(cell.num)
+colourCount = length(unique(cell.num))
+getPalette = colorRampPalette(brewer.pal(11, "Set1"))
+# Plot tSNE with new legend labels for clusters
+p4 <- DimPlot(object = Nigra.integrated, do.return = T,  pt.size = 1.2, group.by="Phase", reduction.use = "umap") 
+p4 <- p4 +  scale_colour_manual(breaks = ClusterBreaks, 
+                        labels = ClusterLabels, values=getPalette(colourCount)) 
+p4 <- p4 + labs(x = "UMAP1",
+       y = "UMAP2")
+p4 <- p4 +  theme(legend.text=element_text(size=16))
+p4
+
+
+
+#table(sample_Nigra@ident, sample_Nigra@meta.data$samples)
+#sample_Nigra@meta.data$nUMIcat <-cut(sample_Nigra@meta.data$nUMI, breaks= c(0,4000,8000,12000,16000,20000,24000,28000,32000,Inf), labels=c( "2k","4k","8k","12k","16k","20k","24k","28k","32k"),right=FALSE)
+
+#colourCount=11
+#getPalette = colorRampPalette(brewer.pal(11, "BuGn"))
+
+#p3 <- ggplot(nigra.integrated_tSNE, aes(x= tSNE_1, y=tSNE_2))  
+#p3 <- p3 +geom_point(size=1.2, aes(colour=nUMI)) 
+# <- p3 +theme_bw(base_size=12)
+#p3 <- p3 +  scale_color_gradientn(colors = brewer.pal(11,"Spectral"),limits=c(500,33000), guide = "colourbar")
+#
+```
+
+
+```{r, fig.width=25, fig.height=9}
+plot_grid(p1,p2)
+plot_grid(p3,p4)
+
+```
+
+
+
+#Boxplots for celltype vs nUMI
+```{r}
+metadata <- as.data.frame(Nigra.integrated_v3@meta.data)
+metadata <- metadata[,c(1,2,6,7,8,9,10,38,41,42)]
+metadata <- as.data.table(metadata)
+plot_data <- melt(metadata, id=c( "ClusterNames_0.4_level2_new"), measure=c("nUMI"))
+#plot_data$ClusterNames_0.8_level1 <- as.factor(plot_data$ClusterNames_0.8_level1)
+#levels(plot_data$ClusterNames_0.8_level1)[levels(plot_data$ClusterNames_0.8_level1)=="Pyramidal_Neurons"] <- "Ex neurons"
+#levels(plot_data$ClusterNames_0.8_level1)[levels(plot_data$ClusterNames_0.8_level1)=="Interneurons"] <- "In neurons"
+```
+
+# nUMI plot
+```{r mapping_stats_2_plot, fig.height=2.5, fig.width=3.5}
+
+
+umi_plot <- ggplot(plot_data, aes(x=ClusterNames_0.4_level2_new, y=value, fill=ClusterNames_0.4_level2_new))
+umi_plot <- umi_plot + geom_violin(trim = T, scale = "width")
+ umi_plot <- umi_plot + stat_summary(fun.y=median, geom="point", size=1.0, color="black")
+#p <- p + ggbeeswarm::geom_quasirandom(aes(colour= ClusterNames_0.8_level1), size=0.7, alpha=0.7)
+umi_plot <- umi_plot + scale_fill_manual(values = c("Microglia" = "#7997FF", "DaNs" = "#FF3300","Astrocytes-1"="#00B92A","ODC-1"="#00BFC4","OPC"="#A3A500","Endothelial"="#800080","Astrocytes-2"="#FA62DB","ODC-2"="#D89000","ODC-3"="#FF6A98","GABA"="#f2bf00"))
+#umi_plot <- umi_plot + coord_flip()
+umi_plot <- umi_plot + theme(axis.text.x = element_text(angle=32,hjust=1, size=6)) + theme(axis.text.y = element_text(size=6))+ theme(axis.title.y = element_text(size=7)) +theme(axis.title.x = element_text(size=7))
+umi_plot <- umi_plot  +ggtitle("UMI depth") + theme(plot.title = element_text(hjust = 0.5, size=6, face="bold"))
+#umi_plot <- umi_plot + guides(color = guide_legend(override.aes = list(size=3), nrow = 2))
+umi_plot <-  umi_plot + theme(legend.text=element_text(size=5)) + theme(legend.title=element_text(size=6))
+umi_plot <- umi_plot + theme(legend.position="none")
+umi_plot <- umi_plot + xlab("") + ylab("nUMI")
+umi_plot 
+
+
+```
+
+#Boxplots for celltype vs nGene
+```{r}
+#metadata <- as.data.frame(Cortex.integrated@meta.data)
+#metadata <- metadata[,c(1,2,6,7,8,9,10,22,25)]
+#metadata <- as.data.table(metadata)
+metadata <- as.data.table(metadata)
+plot_data <- melt(metadata, id=c( "ClusterNames_0.4_level2_new"), measure=c("nGene"))
+#plot_data$ClusterNames_0.8_level1 <- as.factor(plot_data$ClusterNames_0.8_level1)
+#levels(plot_data$ClusterNames_0.8_level1)[levels(plot_data$ClusterNames_0.8_level1)=="Pyramidal_Neurons"] <- "Ex neurons"
+#levels(plot_data$ClusterNames_0.8_level1)[levels(plot_data$ClusterNames_0.8_level1)=="Interneurons"] <- "In neurons"
+```
+
+# nGene plot
+```{r mapping_stats_2_plot, fig.height=2.5, fig.width=3.5}
+
+ngene_plot <- ggplot(plot_data, aes(x=ClusterNames_0.4_level2_new, y=value, fill=ClusterNames_0.4_level2_new))
+ngene_plot <-ngene_plot + geom_violin(trim = T, scale="width")
+ngene_plot <- ngene_plot + stat_summary(fun.y=median, geom="point", size=1.0, color="black")
+#p <- p + ggbeeswarm::geom_quasirandom(aes(colour= ClusterNames_0.8_level1), size=0.7, alpha=0.7)
+ngene_plot <- ngene_plot + scale_fill_manual(values = c("Microglia" = "#7997FF", "DaNs" = "#FF3300","Astrocytes-1"="#00B92A","ODC-1"="#00BFC4","OPC"="#A3A500","Endothelial"="#800080","Astrocytes-2"="#FA62DB","ODC-2"="#D89000","ODC-3"="#FF6A98","GABA"="#f2bf00" ))
+ngene_plot <- ngene_plot + theme(axis.text.x = element_text(angle=32,hjust=1, size=6)) + theme(axis.text.y = element_text(size=6))+ theme(axis.title.y = element_text(size=7)) +theme(axis.title.x = element_text(size=7))
+ngene_plot <- ngene_plot  +ggtitle("Gene coverage") + theme(plot.title = element_text(hjust = 0.5, size=6, face="bold"))
+#umi_plot <- umi_plot + guides(color = guide_legend(override.aes = list(size=3), nrow = 2))
+ngene_plot <-  ngene_plot + theme(legend.text=element_text(size=5)) + theme(legend.title=element_text(size=6))
+ngene_plot <- ngene_plot + theme(legend.position="none")
+ngene_plot <- ngene_plot + xlab("") + ylab("nGene")
+ngene_plot 
+
+
+```
+# get average of all covariates for Nigra cell types level 2
+```{r}
+library (dplyr)
+
+metadata_short <- Nigra.integrated_v3@meta.data  %>% group_by(level2class_new) %>% summarise(nUMI= median(nUMI), nGene=median(nGene))
+
+```
+
+```{r}
+library(tibbletime)
+metadata_short <- metadata %>% group_by(ClusterNames_0.4_level2_new,sample) %>% summarise(tot.per.sample=n()) 
+
+
+
+metadata_short <- metadata_short %>% group_by(ClusterNames_0.4_level2_new)  %>% mutate(tot.cluster.pt= sum(tot.per.sample)) %>% mutate(percent=100*tot.per.sample/tot.cluster.pt)
+
+  
+
+setnames(metadata_short, "sample", "Sample")
+metadata_short$ClusterNames_0.4_level2_new <- as.factor(metadata_short$ClusterNames_0.4_level2_new)
+##levels(metadata_short$ClusterNames_0.8_level1)[levels(metadata_short$ClusterNames_0.8_level1)=="Pyramidal_Neurons"] <- "Ex #neurons"
+#levels(metadata_short$ClusterNames_0.8_level1)[levels(metadata_short$ClusterNames_0.8_level1)=="Interneurons"] <- "In neurons"
+```
+
+```{r , fig.height=2.5, fig.width=3.5}
+library(RColorBrewer)
+sample_plot <- ggplot(metadata_short, aes(ClusterNames_0.4_level2_new, percent, fill=Sample)) 
+sample_plot <- sample_plot +geom_bar(stat="identity", position="stack", colour ="black", width = 0.7)  + scale_fill_brewer(palette="Set1")
+#sample_plot <- sample_plot + coord_flip()
+sample_plot <- sample_plot + theme(axis.text.x = element_text(angle=32,hjust=1, size=6)) + theme(axis.text.y = element_text(size=6))+ theme(axis.title.y = element_text(size=7)) +theme(axis.title.x = element_text(size=7))
+sample_plot <- sample_plot  +ggtitle("Sample proportions") + theme(plot.title = element_text(hjust = 0.5, size=6, face="bold"))
+sample_plot <- sample_plot + guides(color = guide_legend(override.aes = list(size=3), nrow = 2))
+sample_plot <-  sample_plot + theme(legend.text=element_text(size=5)) + theme(legend.title=element_text(size=6)) +theme(legend.key.size = unit(0.5, 'lines'))
+sample_plot <- sample_plot + theme(legend.position="right")
+sample_plot <- sample_plot + xlab("") + ylab("Percent")
+sample_plot 
+```
+
+# Batch plot
+```{r}
+#library (dplyr)
+
+metadata_short <- metadata %>% group_by(ClusterNames_0.4_level2_new, batch) %>% summarise(tot.per.batch=n())%>% group_by(ClusterNames_0.4_level2_new) %>%
+  mutate(tot.cluster.pt= sum(tot.per.batch)) %>%
+  mutate(percent=100*tot.per.batch/tot.cluster.pt)
+
+setnames(metadata_short, "batch", "Batch")
+#metadata_short$ClusterNames_0.8_level1 <- as.factor(metadata_short$ClusterNames_0.8_level1)
+#levels(metadata_short$ClusterNames_0.8_level1)[levels(metadata_short$ClusterNames_0.8_level1)=="Pyramidal_Neurons"] <- "Ex neurons"
+#levels(metadata_short$ClusterNames_0.8_level1)[levels(metadata_short$ClusterNames_0.8_level1)=="Interneurons"] <- "In neurons"
+```
+
+```{r , fig.height=2.5, fig.width=3.5}
+library(RColorBrewer)
+batch_plot <- ggplot(metadata_short, aes(ClusterNames_0.4_level2_new, percent, fill=Batch)) 
+batch_plot <- batch_plot +geom_bar(stat="identity", position="stack", colour ="black", width = 0.7)  + scale_fill_brewer(palette="Set1")
+batch_plot <- batch_plot + theme(axis.text.x = element_text(angle=32,hjust=1, size=6)) + theme(axis.text.y = element_text(size=6))+ theme(axis.title.y = element_text(size=7)) +theme(axis.title.x = element_text(size=7))
+batch_plot <- batch_plot  +ggtitle("Batch proportions") + theme(plot.title = element_text(hjust = 0.5, size=6, face="bold"))
+batch_plot <- batch_plot + guides(color = guide_legend(override.aes = list(size=3), nrow = 2))
+batch_plot <-  batch_plot + theme(legend.text=element_text(size=5)) + theme(legend.title=element_text(size=6)) +theme(legend.key.size = unit(0.5, 'lines'))
+batch_plot <-  batch_plot + theme(legend.position="right")
+batch_plot <- batch_plot + xlab("") + ylab("Percent")
+batch_plot 
+```
+
+# Cell Cycle Phase proportions plot
+
+```{r}
+
+
+metadata_short <-metadata %>% group_by(ClusterNames_0.4_level2_new, Phase) %>% summarise(tot.per.phase=n())%>% group_by(ClusterNames_0.4_level2_new) %>%
+  mutate(tot.cluster.pt= sum(tot.per.phase)) %>%
+  mutate(percent=100*tot.per.phase/tot.cluster.pt)
+
+#setnames(metadata_short, "batch", "Batch")
+metadata_short$ClusterNames_0.4_level2_new<- as.factor(metadata_short$ClusterNames_0.4_level2_new)
+#levels(metadata_short$ClusterNames_0.8_level1)[levels(metadata_short$ClusterNames_0.8_level1)=="Pyramidal_Neurons"] <- "Ex #neurons"
+#levels(metadata_short$ClusterNames_0.8_level1)[levels(metadata_short$ClusterNames_0.8_level1)=="Interneurons"] <- "In neurons"
+```
+
+```{r , fig.height=2.5, fig.width=3.5}
+library(RColorBrewer)
+phase_plot <- ggplot(metadata_short, aes(ClusterNames_0.4_level2_new, percent, fill=Phase)) 
+phase_plot <- phase_plot +geom_bar(stat="identity", position="stack", colour ="black", width = 0.7)  + scale_fill_brewer(palette="Set1")
+phase_plot <- phase_plot + theme(axis.text.x = element_text(angle=32,hjust=1, size=6)) + theme(axis.text.y = element_text(size=6))+ theme(axis.title.y = element_text(size=7)) +theme(axis.title.x = element_text(size=7))
+phase_plot <- phase_plot  +ggtitle("Cell-cycle phase") + theme(plot.title = element_text(hjust = 0.5, size=6, face="bold"))
+phase_plot <- phase_plot + guides(color = guide_legend(override.aes = list(size=3), nrow = 2))
+phase_plot <-  phase_plot + theme(legend.text=element_text(size=5)) + theme(legend.title=element_text(size=6)) +theme(legend.key.size = unit(0.5, 'lines'))
+phase_plot <-  phase_plot + theme(legend.position="right")
+phase_plot <- phase_plot + xlab("") + ylab("Percent")
+phase_plot 
+```
+
+
+```{r, fig.width=7, fig.height=8}
+library(cowplot)
+tiff(filename = "/Volumes/Seagate Backup Plus Drive/Oxford_postdoc/10x_scN_tara_human/Samples_merged/Nigra_merged_CCA/SN_metrics_l2_v3.tiff", width = 17.8, height = 19.0,res = 300, unit="cm")
+plot_grid(SN_tsne,batch_plot, sample_plot,umi_plot,ngene_plot, label_size = 8, labels= "auto",align = "hv", ncol = 2, axis = "tb")
+
+```
+
+
+
+
+```{r, fig.width=25, fig.height=9}
+plot_grid(p1,p2)
+plot_grid(p3,p4)
+
+```
+
+
+
+### Further subdivisions within cell types 
++ Change cluster resolution settings to see if we have further subdivisions of clusters
+
+If you perturb some of our parameter choices above (for example, setting  `resolution=0.6` or changing the number of PCs), 
+
+```{r investigate_split, fig.width=18, fig.height=8}
+Nigra.integrated <- FindClusters(Nigra.integrated, reduction.type = "cca.aligned",
+                                    dims.use = 1:25, save.SNN = T, resolution = 0.6, n.iter = 1000, plot.SNN = T)
+
+# First lets stash our identities for later
+# did that already
+#sample_N4_N4B <- StashIdent(object = sample_N4_N4B, save.name = "ClusterNames_0.8")
+
+# Note that if you set save.snn=T above, you don't need to recalculate the SNN, and can simply put: 
+# pbmc <- FindClusters(pbmc,resolution = 0.8)
+#Nigra.integrated <- FindClusters(object = Nigra.integrated, reduction.type = "pca", dims.use = 1:12, resolution = 0.6, print.output = FALSE, n.start = 1000, n.iter = 1000, save.SNN = T)
+# Demonstration of how to plot two tSNE plots side by side, and how to color points based on different criteria
+plot1 <- TSNEPlot(object = Nigra.integrated, do.return = TRUE, no.legend =F , do.label = TRUE)
+plot2 <- TSNEPlot(object = Nigra.integrated, do.return = TRUE, group.by = "ClusterNames_0.4", do.label = TRUE)
+plot_grid(plot1, plot2)
+
+```
+```{r}
+Nigra.integrated.markers_0.6<- FindAllMarkers(object = Nigra.integrated, only.pos = T, min.pct = 0.25, thresh.use = 0.25, test.use="negbinom", logfc.threshold = 0.25)
+Nigra.integrated.markers_0.6 %>% group_by(cluster) %>% top_n(10, avg_logFC)
+```
+```{r}
+Nigra.integrated <- StashIdent(object = Nigra.integrated, save.name =  "res_0.6")
+Nigra.integrated <- SetAllIdent(object = Nigra.integrated, id = "res_0.6")
+```
+
+
+```{r}
+Nigra.integrated.OCD1_subset<- FindMarkers(object = Nigra.integrated,ident.1 = 0, ident.2 = 3, only.pos = F, min.pct = 0.25, thresh.use = 0.25, test.use="negbinom", logfc.threshold = 0.25)
+```
+
+#CLUSTER O,3 RES 0.6 ODC-1 SUSBET
+
+```{r, fig.height=18}
+FeaturePlot(object = Nigra.integrated, features.plot = c("APOD", "CNP", "CRYAB","S100A1","TUBA1A","PLXDC2","HSPA1A","PEX5L","CADM2"), cols.use = c("grey", 
+    "red"), nCol = 2)
+FeaturePlot(object = Nigra.integrated, features.plot = c("ADAMTS18","CNDP1","KCNMB4","CREB5", "PALM2", "SIK3","SVEP1"), cols.use = c("grey", 
+    "red"), nCol = 2)
+VlnPlot(object = Nigra.integrated, features.plot = c("ADAMTS18","CNDP1","KCNMB4","CREB5", "PALM2", "SIK3","SVEP1"), nCol = 2, do.sort = T, use.scaled=T)
+VlnPlot(object = Nigra.integrated, features.plot = c("APOD", "CNP", "CRYAB","S100A1","TUBA1A","PLXDC2","HSPA1A","PEX5L","CADM2"), nCol = 2, do.sort = T, use.scaled=T)
+```
+#SUBSET ODC-2 , AS 1 VS 7
+
+```{r}
+Nigra.integrated.OCD2_subset<- FindMarkers(object = Nigra.integrated,ident.1 = 1, ident.2 = 7, only.pos = F, min.pct = 0.20, thresh.use = 0.20, test.use="negbinom", logfc.threshold = 0.20)
+```
+
+#CLUSTER 1,7 RES 0.6 ODC-2 SUSBET
+
+```{r, fig.height=18}
+FeaturePlot(object = Nigra.integrated, features.plot = c("MARCKSL1","MT-ND3","C2orf82","NRXN1","CTNND2","KNOP1","BAIAP2L2","GRID2","SGK1"), cols.use = c("grey", 
+    "red"), nCol = 2)
+FeaturePlot(object = Nigra.integrated, features.plot = c("S100B","FBXO32","TF","PPDPF","CDK18","KNOP1", "CFTR", "KLK6","DNAH17"), cols.use = c("grey", 
+    "red"), nCol = 2)
+VlnPlot(object = Nigra.integrated, features.plot = c("MARCKSL1","MT-ND3","C2orf82","NRXN1","CTNND2","KNOP1","BAIAP2L2","GRID2","SGK1"), nCol = 2, do.sort = T, use.scaled=T)
+VlnPlot(object = Nigra.integrated, features.plot = c("S100B","FBXO32","TF","PPDPF","CDK18","KNOP1", "CFTR", "KLK6","DNAH17"), nCol = 2, do.sort = T, use.scaled=T)
+```
+### Further subdivisions within cell types
+
+If you perturb some of our parameter choices above (for example, setting  `resolution=0.8` or changing the number of PCs), 
+
+```{r investigate_split, fig.width=18, fig.height=8}
+Nigra.integrated <- FindClusters(Nigra.integrated, reduction.type = "cca.aligned",
+                                    dims.use = 1:25, save.SNN = T, resolution = 0.8, n.iter = 1000, plot.SNN = T)
+
+# First lets stash our identities for later
+# did that already
+#sample_N4_N4B <- StashIdent(object = sample_N4_N4B, save.name = "ClusterNames_0.8")
+
+# Note that if you set save.snn=T above, you don't need to recalculate the SNN, and can simply put: 
+# pbmc <- FindClusters(pbmc,resolution = 0.8)
+#Nigra.integrated <- FindClusters(object = Nigra.integrated, reduction.type = "pca", dims.use = 1:12, resolution = 0.6, print.output = FALSE, n.start = 1000, n.iter = 1000, save.SNN = T)
+# Demonstration of how to plot two tSNE plots side by side, and how to color points based on different criteria
+plot1 <- TSNEPlot(object = Nigra.integrated, do.return = TRUE, no.legend =F , do.label = TRUE)
+plot2 <- TSNEPlot(object = Nigra.integrated, do.return = TRUE, group.by = "ClusterNames_0.4", do.label = TRUE)
+plot_grid(plot1, plot2)
+
+```
+
+```{r}
+Nigra.integrated <- StashIdent(object = Nigra.integrated, save.name = "res_0.8")
+
+```
+
+
+# OPC CLUSTER SUBBSETS 7 VS 12 AND 10
+
+```{r}
+Nigra.integrated.OPC_subset_7VS12.10<- FindMarkers(object = Nigra.integrated,ident.1 = 7, ident.2 = c(12,10), only.pos = F, min.pct = 0.20, thresh.use = 0.20, test.use="negbinom", logfc.threshold = 0.20)
+```
+
+# opc CLUSTER 7,12,10  RES 0.8 OPC SUSBET, 
+```{r, fig.height=25,fig.width=18}
+# 7 VS 12,10
+FeaturePlot(object = Nigra.integrated, features.plot = c("HSPA1A","FOS","HSPB1", "LUZP2", "GPC5", "SAT1", "CST3", "SCG3","IGFBP5","ORAOV1" ,"LRP6" ,"RCN2","CASK"), cols.use = c("grey", 
+    "red"), nCol = 2)
+VlnPlot(object = Nigra.integrated, features.plot = c("HSPA1A","FOS","HSPB1", "LUZP2", "GPC5", "SAT1", "CST3", "SCG3","IGFBP5","ORAOV1" ,"LRP6" ,"RCN2","CASK"), nCol = 2, do.sort = T, use.scaled=T)
+
+#FeaturePlot(object = Nigra.integrated, features.plot = c("S100B","FBXO32","TF","PPDPF","CDK18","KNOP1", "CFTR", "KLK6","DNAH17"), cols.use = c("grey", 
+   # "red"), nCol = 2)
+```
+# OPC CLUSTER 12 RES O.8, FIND markers that are highest in cluster 12 vs everything and plot that to be sure, DEG are matru astrocyte markers
+```{r}
+Nigra.integrated.OPC_subset_12<- FindMarkers(object = Nigra.integrated,ident.1 = 12, only.pos = T, min.pct = 0.20, thresh.use = 0.20, test.use="negbinom", logfc.threshold = 0.20)
+```
+
+#cluster 12 DEG featureplot
+```{r, fig.height=25,fig.width=18}
+Nigra.integrated <- SetAllIdent(object = Nigra.integrated, id = "res_0.8")
+# 12 VS EVERYTHING
+FeaturePlot(object = Nigra.integrated, features.plot = c("CSPG5","PDGFRA","APOD","TMEM100","TNR","OPCML","LRRC4C","KCNIP4","CSMD1","MMP16","SNTG1","LUZP2","CASK"), cols.use = c("grey", 
+    "red"), nCol = 2)
+VlnPlot(object = Nigra.integrated, features.plot = c("CSPG5","PDGFRA","APOD","TMEM100","TNR","OPCML","LRRC4C","KCNIP4","CSMD1","MMP16","SNTG1","LUZP2","CASK"), nCol = 2, do.sort = T, use.scaled=T)
+#FeaturePlot(object = Nigra.integrated, features.plot = c("S100B","FBXO32","TF","PPDPF","CDK18","KNOP1", "CFTR", "KLK6","DNAH17"), cols.use = c("grey", 
+   # "red"), nCol = 2)
+```
+# OPC CLUSTER SUBBSETS 10 VS 7 AND 12, ONLY SHISA9 EXPRESSED SIGNIFICANTLY
+
+```{r}
+Nigra.integrated.OPC_subset_10_VS_712<- FindMarkers(object = Nigra.integrated,ident.1 = 10, ident.2 = c(7,12), only.pos = T, min.pct = 0.20, thresh.use = 0.20, test.use="negbinom", logfc.threshold = 0.20)
+
+Nigra.integrated.OPC_subset_7_VS_12<- FindMarkers(object = Nigra.integrated,ident.1 = 7, ident.2 = 12, only.pos = F, min.pct = 0.20, thresh.use = 0.20, test.use="negbinom", logfc.threshold = 0.20)
+```
+
+### Further subdivisions within cell types
+
+If you perturb some of our parameter choices above (for example, setting  `resolution=1.0` or changing the number of PCs), 
+
+```{r investigate_split, fig.width=18, fig.height=8}
+Nigra.integrated <- FindClusters(Nigra.integrated, reduction.type = "cca.aligned",
+                                    dims.use = 1:25, save.SNN = T, resolution = 1.0, n.iter = 1000, plot.SNN = T)
+
+# First lets stash our identities for later
+# did that already
+#sample_N4_N4B <- StashIdent(object = sample_N4_N4B, save.name = "ClusterNames_0.8")
+
+# Note that if you set save.snn=T above, you don't need to recalculate the SNN, and can simply put: 
+# pbmc <- FindClusters(pbmc,resolution = 0.8)
+#Nigra.integrated <- FindClusters(object = Nigra.integrated, reduction.type = "pca", dims.use = 1:12, resolution = 0.6, print.output = FALSE, n.start = 1000, n.iter = 1000, save.SNN = T)
+# Demonstration of how to plot two tSNE plots side by side, and how to color points based on different criteria
+plot1 <- TSNEPlot(object = Nigra.integrated, do.return = TRUE, no.legend =F , do.label = TRUE)
+plot2 <- TSNEPlot(object = Nigra.integrated, do.return = TRUE, group.by = "ClusterNames_0.4", do.label = TRUE)
+plot_grid(plot1, plot2)
+
+```
+
+```{r}
+Nigra.integrated <- StashIdent(object = Nigra.integrated, save.name = "res_1.0")
+
+```
+
+### Further subdivisions within cell types
+
+If you perturb some of our parameter choices above (for example, setting  `resolution=1.2` or changing the number of PCs), 
+
+```{r investigate_split, fig.width=18, fig.height=8}
+Nigra.integrated <- FindClusters(Nigra.integrated, reduction.type = "cca.aligned",
+                                    dims.use = 1:25, save.SNN = T, resolution = 1.2, n.iter = 1000, plot.SNN = T)
+
+# First lets stash our identities for later
+# did that already
+#sample_N4_N4B <- StashIdent(object = sample_N4_N4B, save.name = "ClusterNames_0.8")
+
+# Note that if you set save.snn=T above, you don't need to recalculate the SNN, and can simply put: 
+# pbmc <- FindClusters(pbmc,resolution = 0.8)
+#Nigra.integrated <- FindClusters(object = Nigra.integrated, reduction.type = "pca", dims.use = 1:12, resolution = 0.6, print.output = FALSE, n.start = 1000, n.iter = 1000, save.SNN = T)
+# Demonstration of how to plot two tSNE plots side by side, and how to color points based on different criteria
+plot1 <- TSNEPlot(object = Nigra.integrated, do.return = TRUE, no.legend =F , do.label = TRUE)
+plot2 <- TSNEPlot(object = Nigra.integrated, do.return = TRUE, group.by = "ClusterNames_0.4", do.label = TRUE)
+plot_grid(plot1, plot2)
+
+```
+```{r}
+Nigra.integrated <- StashIdent(object = Nigra.integrated, save.name = "res_1.2")
+
+```
+
+# subset astrocyte-1 clusters to cluster 9 and 5.
+```{r}
+Nigra.integrated.astrocyte1_9_5<- FindMarkers(object = Nigra.integrated,ident.1 = 9, ident.2 = 5, only.pos = F, min.pct = 0.20, thresh.use = 0.20, test.use="negbinom", logfc.threshold = 0.20)
+
+
+```
+# subset astrocyte-1 clusters to cluster 9 and 5. feature plot of DEG
+```{r, fig.height=25,fig.width=18}
+Nigra.integrated <- SetAllIdent(object = Nigra.integrated, id = "res_1.2")
+FeaturePlot(object = Nigra.integrated, features.plot = c("FRMD4A","ARHGAP24","MCF2L2", "SRGN", "DOCK4", "ADM", "CAPS","AGT","WDR49"), cols.use = c("grey", 
+    "red"), nCol = 2)
+VlnPlot(object = Nigra.integrated, features.plot = c("FRMD4A","ARHGAP24","MCF2L2", "SRGN", "DOCK4", "ADM", "CAPS","AGT","WDR49"), nCol = 2, do.sort = T, use.scaled=T)
+#FeaturePlot(object = Nigra.integrated, features.plot = c("S100B","FBXO32","TF","PPDPF","CDK18","KNOP1", "CFTR", "KLK6","DNAH17"), cols.use = c("grey", 
+   # "red"), nCol = 2)
+```
+
+
+
+
+```{r investigate_split, fig.width=18, fig.height=8}
+Nigra.integrated <- FindClusters(Nigra.integrated, reduction.type = "cca.aligned",
+                                    dims.use = 1:25, save.SNN = T, resolution = 1.4, n.iter = 1000, plot.SNN = T)
+
+# First lets stash our identities for later
+# did that already
+#sample_N4_N4B <- StashIdent(object = sample_N4_N4B, save.name = "ClusterNames_0.8")
+
+# Note that if you set save.snn=T above, you don't need to recalculate the SNN, and can simply put: 
+# pbmc <- FindClusters(pbmc,resolution = 0.8)
+#Nigra.integrated <- FindClusters(object = Nigra.integrated, reduction.type = "pca", dims.use = 1:12, resolution = 0.6, print.output = FALSE, n.start = 1000, n.iter = 1000, save.SNN = T)
+# Demonstration of how to plot two tSNE plots side by side, and how to color points based on different criteria
+plot1 <- TSNEPlot(object = Nigra.integrated, do.return = TRUE, no.legend =F , do.label = TRUE)
+plot2 <- TSNEPlot(object = Nigra.integrated, do.return = TRUE, group.by = "ClusterNames_0.4", do.label = TRUE)
+plot_grid(plot1, plot2)
+
+```
+```{r}
+Nigra.integrated <- StashIdent(object = Nigra.integrated, save.name = "res_1.4")
+
+```
+
+```{r}
+
+Nigra.integrated <- SetAllIdent(object = Nigra.integrated, id = "ClusterNames_0.4")
+```
+
+
+```{r investigate_split, fig.width=18, fig.height=8}
+Nigra.integrated <- FindClusters(Nigra.integrated, reduction.type = "cca.aligned",
+                                    dims.use = 1:25, save.SNN = T, resolution = 1.6, n.iter = 1000, plot.SNN = T)
+
+# First lets stash our identities for later
+# did that already
+#sample_N4_N4B <- StashIdent(object = sample_N4_N4B, save.name = "ClusterNames_0.8")
+
+# Note that if you set save.snn=T above, you don't need to recalculate the SNN, and can simply put: 
+# pbmc <- FindClusters(pbmc,resolution = 0.8)
+#Nigra.integrated <- FindClusters(object = Nigra.integrated, reduction.type = "pca", dims.use = 1:12, resolution = 0.6, print.output = FALSE, n.start = 1000, n.iter = 1000, save.SNN = T)
+# Demonstration of how to plot two tSNE plots side by side, and how to color points based on different criteria
+plot1 <- TSNEPlot(object = Nigra.integrated, do.return = TRUE, no.legend =F , do.label = TRUE)
+plot2 <- TSNEPlot(object = Nigra.integrated, do.return = TRUE, group.by = "ClusterNames_0.4", do.label = TRUE)
+plot_grid(plot1, plot2)
+
+```
+
+```{r}
+Nigra.integrated <- StashIdent(object = Nigra.integrated, save.name = "res_1.6")
+
+```
+
+```{r investigate_split, fig.width=18, fig.height=8}
+Nigra.integrated <- FindClusters(Nigra.integrated, reduction.type = "cca.aligned",
+                                    dims.use = 1:25, save.SNN = T, resolution = 1.8, n.iter = 1000, plot.SNN = T)
+
+# First lets stash our identities for later
+# did that already
+#sample_N4_N4B <- StashIdent(object = sample_N4_N4B, save.name = "ClusterNames_0.8")
+
+# Note that if you set save.snn=T above, you don't need to recalculate the SNN, and can simply put: 
+# pbmc <- FindClusters(pbmc,resolution = 0.8)
+#Nigra.integrated <- FindClusters(object = Nigra.integrated, reduction.type = "pca", dims.use = 1:12, resolution = 0.6, print.output = FALSE, n.start = 1000, n.iter = 1000, save.SNN = T)
+# Demonstration of how to plot two tSNE plots side by side, and how to color points based on different criteria
+plot1 <- TSNEPlot(object = Nigra.integrated, do.return = TRUE, no.legend =F , do.label = TRUE)
+plot2 <- TSNEPlot(object = Nigra.integrated, do.return = TRUE, group.by = "ClusterNames_0.4", do.label = TRUE)
+plot_grid(plot1, plot2)
+
+```
+
+```{r}
+Nigra.integrated <- StashIdent(object = Nigra.integrated, save.name = "res_1.8")
+
+```
+
+
+```{r}
+
+Nigra.integrated <- SetAllIdent(object = Nigra.integrated, id = "ClusterNames_0.4")
+```
+
+# resoluion 2.0
+```{r investigate_split, fig.width=18, fig.height=8}
+Nigra.integrated <- FindClusters(Nigra.integrated, reduction.type = "cca.aligned",
+                                    dims.use = 1:25, save.SNN = T, resolution = 2.0, n.iter = 1000, plot.SNN = T)
+
+# First lets stash our identities for later
+# did that already
+#sample_N4_N4B <- StashIdent(object = sample_N4_N4B, save.name = "ClusterNames_0.8")
+
+# Note that if you set save.snn=T above, you don't need to recalculate the SNN, and can simply put: 
+# pbmc <- FindClusters(pbmc,resolution = 0.8)
+#Nigra.integrated <- FindClusters(object = Nigra.integrated, reduction.type = "pca", dims.use = 1:12, resolution = 0.6, print.output = FALSE, n.start = 1000, n.iter = 1000, save.SNN = T)
+# Demonstration of how to plot two tSNE plots side by side, and how to color points based on different criteria
+plot1 <- TSNEPlot(object = Nigra.integrated, do.return = TRUE, no.legend =F , do.label = TRUE)
+plot2 <- TSNEPlot(object = Nigra.integrated, do.return = TRUE, group.by = "ClusterNames_0.4", do.label = TRUE)
+plot_grid(plot1, plot2)
+
+```
+
+```{r}
+Nigra.integrated <- StashIdent(object = Nigra.integrated, save.name = "res_2.0")
+
+```
+
+
+```{r}
+
+Nigra.integrated <- SetAllIdent(object = Nigra.integrated, id = "ClusterNames_0.4")
+```
+
+# resolution 2.2
+```{r investigate_split, fig.width=18, fig.height=8}
+Nigra.integrated <- FindClusters(Nigra.integrated, reduction.type = "cca.aligned",
+                                    dims.use = 1:25, save.SNN = T, resolution = 2.2, n.iter = 1000, plot.SNN = T)
+
+# First lets stash our identities for later
+# did that already
+#sample_N4_N4B <- StashIdent(object = sample_N4_N4B, save.name = "ClusterNames_0.8")
+
+# Note that if you set save.snn=T above, you don't need to recalculate the SNN, and can simply put: 
+# pbmc <- FindClusters(pbmc,resolution = 0.8)
+#Nigra.integrated <- FindClusters(object = Nigra.integrated, reduction.type = "pca", dims.use = 1:12, resolution = 0.6, print.output = FALSE, n.start = 1000, n.iter = 1000, save.SNN = T)
+# Demonstration of how to plot two tSNE plots side by side, and how to color points based on different criteria
+plot1 <- TSNEPlot(object = Nigra.integrated, do.return = TRUE, no.legend =F , do.label = TRUE)
+plot2 <- TSNEPlot(object = Nigra.integrated, do.return = TRUE, group.by = "ClusterNames_0.4", do.label = TRUE)
+plot_grid(plot1, plot2)
+
+```
+```{r}
+Nigra.integrated <- StashIdent(object = Nigra.integrated, save.name = "res_2.2")
+
+```
+
+
+```{r}
+
+Nigra.integrated <- SetAllIdent(object = Nigra.integrated, id = "ClusterNames_0.4")
+```
+
+
+# resolution 2.4
+```{r investigate_split, fig.width=18, fig.height=8}
+Nigra.integrated <- FindClusters(Nigra.integrated, reduction.type = "cca.aligned",
+                                    dims.use = 1:25, save.SNN = T, resolution = 2.4, n.iter = 1000, plot.SNN = T)
+
+# First lets stash our identities for later
+# did that already
+#sample_N4_N4B <- StashIdent(object = sample_N4_N4B, save.name = "ClusterNames_0.8")
+
+# Note that if you set save.snn=T above, you don't need to recalculate the SNN, and can simply put: 
+# pbmc <- FindClusters(pbmc,resolution = 0.8)
+#Nigra.integrated <- FindClusters(object = Nigra.integrated, reduction.type = "pca", dims.use = 1:12, resolution = 0.6, print.output = FALSE, n.start = 1000, n.iter = 1000, save.SNN = T)
+# Demonstration of how to plot two tSNE plots side by side, and how to color points based on different criteria
+plot1 <- TSNEPlot(object = Nigra.integrated, do.return = TRUE, no.legend =F , do.label = TRUE)
+plot2 <- TSNEPlot(object = Nigra.integrated, do.return = TRUE, group.by = "ClusterNames_0.4", do.label = TRUE)
+plot_grid(plot1, plot2)
+
+```
+
+```{r}
+Nigra.integrated <- SetAllIdent(object = Nigra.integrated, id = "res.0.8")
+current.cluster.ids <- c(0, 1, 2, 3, 4, 5, 6,7,8,9,10,11,12,13,14)
+new.cluster.ids <- c( 1, 2, 3, 4, 5, 6,7,8,9,10,11,12,13,14,15)
+#current.cluster.ids <- c("Oligodendrocytes-1", "Oligodendrocytes-2", "Astrocytes", "Oligodendorcytes-3", "OPC", "Dopinamergic Neurons", "Microglia")
+#new.cluster.ids <- c(0, 1, 2, 3, 4, 5, 6)
+Nigra.integrated@ident <- plyr::mapvalues(x = Nigra.integrated@ident, from = current.cluster.ids, to = new.cluster.ids)
+```
+
+
+```{r}
+
+#Nigra.integrated <- SetAllIdent(object = Nigra.integrated, id = "ClusterNames_0.4")
+```
+
+# Build cluster tree for resolution 2.4 to validate clusters 
+
+```{r}
+#Nigra.integrated <- SetAllIdent(sample_Nigra, id = "res.6")
+#Build a classification hierarchy that places transcriptionally similar clusters adjacent on a tree
+Nigra.integrated <- BuildClusterTree(Nigra.integrated, do.reorder = T)
+
+#sample_Nigra <- BuildClusterTree(sample_Nigra, pcs.use = 1:12, do.reorder = T, reorder.numeric = T)
+#sample_Nigra <- BuildClusterTree(sample_Nigra, do.reorder = T, reorder.numeric = F)
+#sample_Nigra <- BuildClusterTree(sample_Nigra, do.reorder = T, reorder.numeric = T)
+
+```
+```{r}
+#Nigra.integrated <- BuildClusterTree(Nigra.integrated, SNN.use= Nigra.integrated@snn , do.reorder = T)
+```
+
+
+
+
+```{r}
+#calculate the classification error for left/right cells on each branch of the tree
+#sort internal nodes based on OOBE. For nodes with high OOBE, we cannot accurately tell the left/right children apart based on random forests, so the clusters may need to be merged
+node.scores <- AssessNodes(Nigra.integrated)
+node.scores[order(node.scores$oobe,decreasing = T),] -> node.scores
+# Assess based on a given node
+#Assess_split_scores<-AssessSplit(sample_Nigra, node=10)
+# Asses based on two given clusters (or vectors of clusters)
+#AssessSplit(sample_Nigra, cluster1 = Oligodendrocytes-1, cluster2 = 3)
+
+```
+
+
+
+
