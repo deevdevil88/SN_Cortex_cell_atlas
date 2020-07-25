@@ -1,0 +1,214 @@
+---
+title: "Violin_plot_figures_Cortex"
+author: "Devika Agarwal"
+date: 'Last update: `r date()`'
+output:
+  html_document:
+    fig_height: 5
+    fig_width: 5
+    theme: cerulean
+    toc: yes
+    toc_float:
+      collapsed: yes
+      smooth_scroll: yes
+      toc_depth: 5
+  pdf_document:
+    toc: yes
+  word_document:
+    toc: yes
+---
+
+```{r setup, include=FALSE}
+#setwd("F:/Oxford_postdoc/10x_scN_tara_human/Samples_merged/Cortex_Merged_CCA/Figures")
+library(ggplot2)
+library(reshape)
+library(data.table)
+library(dplyr)
+library(tidyr)
+#rm(list = ls())
+theme_set(theme_bw())
+```
+
+# Read in TPM_protein coding genes data
+
+```{r cars}
+SN_log_data <- fread("./Cortex_SN_tpm_umi_notscaled_pdrisk_genes.txt")
+SN_log_data <- as.data.frame(SN_log_data)
+#SN_log_data <- SN_log_data[,-22]
+metadata <- read.table(file= "Cortex_10x_CCA_metadata.txt", sep="\t", header=T)
+#markergenes <-c("AQP4","GFAP","SATB2","SLC17A7","GAD1","GAD2","CSF3R","PLXDC2","MOG","MOBP","OLIG1","VCAN")# DISTINGUISING BETWEEN ALL CELL TYPES
+
+#markergenes <- c("CBLN2","LAMP5","CUX2","RORB", "COL5A2", "IL1RAPL2","TPBG","ETV1", "PCP4","HS3ST5","HTR2C","TLE4","SEMA3D","NTNG2","NR4A2") # EXCITATORY NEURONS
+
+#markergenes <-c("VIP","CNR1","RELN","THSD7B","TAC3","TSHZ2", "LAMP5", "SV2C","COL5A2","EYA4","NOS1","PVALB","SULF1", "RYR1","TAC1","SST","STXBP6", "SYNPR")# IHIBITORY NEURONS, dont need CCK
+
+
+#markergenes <- c("SNCA","PRKN","UCHL1","PINK1","PARK7","LRRK2","ATP13A2","HTRA2","PLA2G6","FBXO7","VPS35","EIF4G1","DNAJC6","SYNJ1","DNAJC13","CHCHD2","VPS13C","GBA","MAPT","GAK","RAB29","BST1","SMPD1","SCARB2","CTSD","GALC","SLC17A5","ATP6V0A1","KAT8","ALAS1","COQ7","MCC1","CTSB") #PD genes
+
+markergenes <- c("SNCA","PRKN","UCHL1","PINK1","PARK7","LRRK2","ATP13A2","FBXO7","VPS35","EIF4G1","DNAJC6","SYNJ1","CHCHD2","VPS13C","GBA","MAPT","GAK","SMPD1","SCARB2","SLC17A5","ATP6V0A1","CTSB","DNAJC13") #PD genes reduced
+
+#markergenes <- c("PSMB2","PPIH","PSMB4","RAB7A","REEP5","ACTB","NONO","GAPDH","VPS29","EMC7","CHMP2A","SNRPD3") # House Keeping genes Viola
+```
+
+# Filter scaled to include only markers on interest
+```{r pressure, echo=FALSE}
+SN_red <- SN_log_data %>% filter(V1 %in% markergenes)
+SN_red_t <- as.data.frame(t(SN_red))
+tempDF <- SN_red_t
+tempDF[] <- lapply(SN_red_t, as.character)
+colnames(SN_red_t) <- tempDF[1, ]
+SN_red_t <- SN_red_t[-1 ,]
+tempDF <- NULL
+SN_red_t[] <- lapply(SN_red_t, function(x) as.numeric(as.character(x)))
+SN_red_t <- log10((SN_red_t)+1)
+SN_red_t$cell_id <- rownames(SN_red_t)
+
+
+```
+#read in Nigra metadata and merge with gene expression data for marker
+```{r}
+#SN_data <- merge(metadata,SN_red_t,by.x="X", by.y="cell_id")
+SN_data <- merge(metadata,SN_red_t,by.x="X", by.y="cell_id",all.x=T,all.y=F) #for neuronal cell types only
+SN_data <- merge(metadata,SN_log_data,by.x="X", by.y="X",all.x=T,all.y=F) #for neuronal cell types only
+```
+
+
+# make Violin plot in long format
+```{r}
+#data_long <- gather(SN_data, Gene_markers, Expression, CSF3R:OLIG1, factor_key=TRUE)# for all cell types
+data_long <- gather(SN_data, Gene_markers, Expression, SNCA:DNAJC13, factor_key=TRUE)
+#data_long <- gather(SN_data, Gene_markers, Expression, THSD7B:PVALB, factor_key=TRUE)
+#data_long <- gather(SN_data, Gene_markers, Expression, NR4A2:PCP4, factor_key=TRUE)
+data_long_1 <- arrange(data_long, Gene_markers,Expression)
+data_long_1$Gene_markers <- ordered(data_long_1$Gene_markers, levels = c("SNCA","PRKN","UCHL1","PINK1","PARK7","LRRK2","ATP13A2","FBXO7","VPS35","EIF4G1","DNAJC6","SYNJ1","CHCHD2","VPS13C","GBA","MAPT","GAK","SMPD1","SCARB2","SLC17A5","ATP6V0A1","CTSB","DNAJC13"))      
+ #data_long_1$Gene_markers <- ordered(data_long_1$Gene_markers, levels = c("CBLN2","LAMP5","CUX2","RORB", "COL5A2", "IL1RAPL2","TPBG","ETV1","PCP4","HS3ST5","HTR2C","TLE4","SEMA3D","NTNG2","NR4A2")) 
+```
+
+# violin plots for the long format, All cell types LEVEL2
+```{r, fig.height=6, fig.width=9}
+tiff(filename = "F:/Oxford_postdoc/10x_scN_tara_human/Samples_merged/Cortex_Merged_CCA/Figures/Cortex_level2_PDgenes.tiff", width = 14, height = 6,res = 300, units="in")
+p <- ggplot(data_long_1, aes(x=ClusterNames_0.8_level_2, y= Expression, group= interaction(Gene_markers,ClusterNames_0.8_level_2), fill=ClusterNames_0.8_level_2 ))
+p <- p + geom_violin(trim=T, scale="width", adjust=0.5)
+p <- p + coord_flip()
+p <- p +  scale_fill_manual("ClusterNames_0.8_level_2", values=c("ODC"="#00B0F6","OPC"="#E76BF3", "Ex1"="#6BB100", "Ex2"="#39B600","Ex3"="#00BA38","Ex4"="#00BA38","Ex5a"="#00BD5F","Ex5b"="#00BD5F","Ex6a"="#00BD5F","Ex6b"="#00BD5F","Ex8"="#00BD5F", "In1a"="#CF9400", "Microglia"="#00BFC4","Astrocyte"="#F8766D", "In1b"="#CF9400","In1c"="#CF9400", "In3"= "#CF9400","In4a"="#CF9400", "In4b"="#CF9400","In5"="#E58700", "In6a"="#C99800", "In6b"="#C99800", "In8"="#C99800")) 
+p <- p + theme(axis.text.y = element_text( size = 6, angle = 0, hjust = 1, vjust = 0, face = "plain"))
+p <- p + theme(axis.title.y=element_blank())
+p <- p + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+p <- p + theme(panel.background = element_blank())
+p <- p + theme(panel.border = element_blank())
+p <- p + theme(legend.position="none")
+p <- p + facet_grid(ClusterNames_0.8_level_2 ~Gene_markers,scales="free_y" , space = "free",shrink=T)
+p <- p + theme(strip.background = element_blank(), strip.text.y = element_blank())
+p <- p + theme(strip.background = element_blank(), strip.text.x = element_text(angle = 45, vjust = 1.0, hjust=1.0,size=6))
+p
+```
+
+# violin plots for thewide format, All cell types LEVEL1
+```{r, fig.height=2.5, fig.width=7}
+#tiff(filename = "F:/Oxford_postdoc/10x_scN_tara_human/Samples_merged/Cortex_Merged_CCA/Figures/Cortex_level1_PDgenes.tiff", width = 14, height = 4,res = 300, units="in")
+Cortex <- ggplot(data_long_1, aes(x=ClusterNames_0.8_level1, y= Expression, group= interaction(Gene_markers,ClusterNames_0.8_level1), fill=ClusterNames_0.8_level1 ))
+Cortex <- Cortex + geom_violin(trim=T, scale="width", adjust=0.5)
+Cortex <- Cortex + coord_flip()
+Cortex <- Cortex +  scale_fill_manual("ClusterNames_0.8_level1", values=c("ODC"="#00B0F6","OPC"="#E76BF3", "Ex neurons"="#39B600","In neurons"="#CF9400", "Microglia"="#00BFC4","Astrocyte"="#F8766D")) 
+Cortex <- Cortex + theme(axis.text.y = element_text( size = 6, angle = 0, hjust = 1, vjust = 0, face = "plain"))
+Cortex <- Cortex + theme(axis.text.x  = element_text( size = 4,  face = "plain"))
+Cortex <- Cortex + theme(axis.title.y=element_blank())
+Cortex <- Cortex + theme(axis.title.x = element_text(size=6))
+Cortex <- Cortex + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+Cortex <- Cortex + theme(panel.background = element_blank())
+Cortex <- Cortex + theme(panel.border = element_blank())
+Cortex <- Cortex + theme(legend.position="none")
+Cortex <- Cortex + facet_grid(ClusterNames_0.8_level1 ~Gene_markers,scales="free" , space = "free",shrink=T)
+Cortex <- Cortex + theme(strip.background = element_blank(), strip.text.y = element_blank())
+Cortex <- Cortex + theme(strip.background = element_blank(), strip.text.x = element_text(angle = 45, vjust = 1.0, hjust=1.0,size=6))
+Cortex
+```
+
+# violin plots for the long format, All cell types LEVEL1 (vertical orientation)
+```{r, fig.height=6, fig.width=9}
+tiff(filename = "~/Desktop/Cortex_PDrisk_genes_level1_violin_vertical_plot_tpm_umi_notscaled_v1.tiff", width = 15, height = 20,res = 300, units="cm")
+p <- ggplot(data_long_1, aes(x=ClusterNames_0.8_level1, y= Expression, group= interaction(Gene_markers,ClusterNames_0.8_level1), fill=ClusterNames_0.8_level1))
+p <- p + geom_violin(trim=T, scale="width", adjust=0.5)
+#p <- p + coord_flip()
+p <- p +  scale_fill_manual("ClusterNames_0.8_level1", values=c("ODC"="#00B0F6","OPC"="#E76BF3", "Ex Neurons"="#39B600","In Neurons"="#CF9400", "Microglia"="#00BFC4","Astrocyte"="#F8766D")) 
+
+p <- p + theme(axis.text.y = element_text( size = 4, angle = 0, hjust = 1, vjust = 0, face = "plain"))
+p <- p + theme(axis.text.x =  element_blank())
+p <- p + theme(axis.title.y=element_blank())
+p <- p +  scale_y_continuous(position="right")
+p <- p + theme(axis.title.x = element_text(size=8))
+p <- p + xlab("Cortex level1 cell types")
+p <- p + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+p <- p + theme(panel.background = element_blank())
+p <- p + theme(panel.border = element_blank())
+p <- p + theme(legend.position="none")
+p <- p + facet_grid(Gene_markers ~ ClusterNames_0.8_level1,scales="free" , space = "free",shrink=T, switch="y")
+p <- p + theme(strip.background = element_blank(), strip.text.y = element_text(size=6,angle = 180, hjust = 1, vjust = 0))
+p <- p + theme(strip.background = element_blank(), strip.text.x = element_text(angle = 45, vjust = 1.0, hjust=1.0,size=6))
+p
+
+
+```
+
+
+# Only plot Neuronal subtypes , Excitatory
+```{r, fig.height=3, fig.width=7.0}
+#tiff(filename = "C:/Users/Devika/Documents/10x_scN_tara_human/Samples_merged/Cortex_merge_CCA/Cortex_excitatory_neuronal_cell_type_markers_violin_plot.tiff", width = 10, height = 4,res = 300, units="in")
+Ex <- ggplot(data_long_1, aes(x=ClusterNames_0.8_level_2, y= Expression, group= interaction(Gene_markers,ClusterNames_0.8_level_2), fill=ClusterNames_0.8_level_2 ))
+Ex <- Ex + geom_violin(trim=T, scale="width", adjust=0.5)
+Ex <- Ex + coord_flip()
+Ex <- Ex +  scale_fill_manual("ClusterNames_0.8_level_2", values=c( "Ex1"="#6BB100", "Ex2"="#39B600","Ex3"="#00BA38","Ex4"="#00BA38","Ex5a"="#00BD5F","Ex5b"="#00BD5F","Ex6a"="#00BD5F","Ex6b"="#00BD5F","Ex8"="#00BD5F")) 
+Ex <- Ex + theme(axis.text.y = element_text( size = 6, angle = 0, hjust = 1, vjust = 0, face = "plain"))
+Ex <- Ex + theme(axis.text.x  = element_text( size = 4,  face = "plain"))
+Ex <- Ex + theme(axis.title.y=element_blank())
+Ex <- Ex + theme(axis.title.x = element_text(size=6))
+Ex <- Ex + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+Ex <- Ex + theme(panel.background = element_blank())
+Ex <- Ex + theme(panel.border = element_blank())
+Ex <- Ex + theme(legend.position="none")
+Ex <- Ex + facet_grid(Layers ~Gene_markers,scales="free" , space = "free",shrink=T)
+Ex <- Ex + theme(strip.background = element_blank(),strip.text.y =  element_text(size=6, face="bold", angle=0))
+Ex <- Ex + theme(strip.background = element_blank(), strip.text.x = element_text(angle = 45, vjust = 1.0, hjust=1.0,size=6))
+Ex
+```
+
+# Only Plot Neuronal Subtypes, inhibitory
+```{r,fig.height=4,fig.width=7}
+#tiff(filename = "C:/Users/Devika/Documents/10x_scN_tara_human/Samples_merged/Cortex_merge_CCA/Cortex_inhibitory_neuronal_cell_type_markers_violin_plot.tiff", width = 10, height = 4,res = 300, units="in")
+In <- ggplot(data_long_1, aes(x=ClusterNames_0.8_level_2, y= Expression, group= interaction(Gene_markers,ClusterNames_0.8_level_2), fill=ClusterNames_0.8_level_2 ))
+In <- In + geom_violin(trim=T, scale="width", adjust=0.5)
+In <- In + coord_flip()
+In <- In +  scale_fill_manual("ClusterNames_0.8_level_2", values=c( "In1a"="#CF9400", "In1b"="#CF9400","In1c"="#CF9400", "In3"= "#CF9400","In4a"="#CF9400", "In4b"="#CF9400","In5"="#E58700", "In6a"="#C99800", "In6b"="#C99800", "In8"="#C99800")) 
+In <- In + theme(axis.text.y = element_text( size = 6, angle = 0, hjust = 1, vjust = 0, face = "plain"))
+In <- In + theme(axis.text.x  = element_text( size = 4,  face = "plain"))
+In <- In + theme(axis.title.y=element_blank())
+In <- In + theme(axis.title.x = element_text(size=6))
+In <- In + theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())
+In <- In + theme(panel.background = element_blank())
+In <- In + theme(panel.border = element_blank())
+In <- In + theme(legend.position="none")
+In <- In + facet_grid(Layers ~Gene_markers,scales="free" , space = "free",shrink=T)
+In <- In + theme(strip.background = element_blank(),strip.text.y =  element_text(size=6, face="bold", angle=0))
+In <- In + theme(strip.background = element_blank(), strip.text.x = element_text(angle = 45, vjust = 1.0, hjust=1.0,size=5))
+In
+```
+```{r}
+library(grid)
+library(gridExtra)
+library(ggplot2)
+library(lattice)
+```
+
+```{r}
+plot_A <- arrangeGrob(Cortex, top = textGrob("a", x= unit(0, "npc"), y=unit(1,"npc"), just = c("left","top"), gp= gpar(col="black", fontsize=10,fontfamily="Times Roman", fontface="bold")))
+
+plot_B <- arrangeGrob(Ex, top = textGrob("b", x= unit(0, "npc"), y=unit(1,"npc"), just = c("left","top"), gp= gpar(col="black", fontsize=10,fontfamily="Times Roman", fontface="bold")))
+
+plot_C <- arrangeGrob(In, top = textGrob("c", x= unit(0, "npc"), y=unit(1,"npc"), just = c("left","top"), gp= gpar(col="black", fontsize=10,fontfamily="Times Roman", fontface="bold")))
+
+tiff(filename = "F:/Oxford_postdoc/10x_scN_tara_human/Samples_merged/Cortex_Merged_CCA/Figures/Cortex_celltypes_multipanel.tiff", width = 17, height = 20,res = 300, units="cm")
+Row_1_2 <- grid.arrange(plot_A, plot_B,plot_C, nrow = 3, heights=c(2/6,2/6,2/6))
+#Row_1_2
+dev.off()
+```
+
